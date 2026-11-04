@@ -1,0 +1,12 @@
+# 强制所有文本文件使用 LF，避免在 Windows 上编辑后
+# shell 脚本带 CRLF 导致 Android 上 sh 报 "syntax error"
+* text=auto eol=lf
+
+# 明确类型
+*.sh    text eol=lf
+*.prop  text eol=lf
+*.py    text eol=lf
+*.md    text eol=lf
+
+# 打包产物按二进制处理
+*.zip   binary

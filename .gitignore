@@ -1,0 +1,10 @@
+# 打包产物
+*.zip
+
+# worker 的运行时备份（由 supervisor 自动生成）
+worker.sh.bak
+
+# 系统垃圾
+.DS_Store
+Thumbs.db
+*.swp
