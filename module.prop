@@ -1,6 +1,6 @@
 id=charge_keepalive_fix
 name=Y700 ColorOS 充电保活 + 温控阶梯 + 电量保护
-version=v2.2
-versionCode=13
+version=v2.3
+versionCode=14
 author=卖火柴的小公举
 description=1) 把被内核 UCSI 误报打回 0 的 charging_enable 持续写回 1，并绕过移植包错误的 80% 充电上限；2) 停用反复开关充电的 WHITE-LOAD-CHARGE；3) 温度 + 电量双维度限流：温度阶梯（<39℃ 6A / <41℃ 4A / <43℃ 3A / 更高 2A）+ 电量阶梯（<80% 6A / 80~89% 5A / 90~94% 3A / >=95% 1.5A），取更保守者；4) 只有真正在充电时才 0.3 秒工作；没在充电（拔线、只接电脑 USB、满电、持续放电）时降到 5 秒一次静默自查，不写日志。支持热更新与自动回滚。

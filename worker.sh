@@ -13,6 +13,8 @@ CONF="$MODDIR/config.prop"
 log() { echo "$(date '+%m-%d %H:%M:%S') $*" >> "$LOG"; }
 # 只取开头连续的数字，避免行尾注释里的数字被混进来
 numonly() { echo "$1" | sed 's/[^0-9].*//'; }
+# 保留小数点的数值（用于 0.3 这类秒数）
+numdec() { echo "$1" | sed 's/[^0-9.].*//'; }
 
 # ---------- 默认参数 ----------
 ENABLE_CE=1
@@ -26,8 +28,9 @@ QUIET_6A=44000
 QUIET_4A=45000
 QUIET_3A=46000
 MAX_CURRENT=6000000     # 最低温档目标电流(mA)，自动映射到冷却档位
+CHARGE_POLL=0.3         # 充电时多少秒轮询一次
 IDLE_POLL=5             # 没在充电时多少秒自查一次
-IDLE_NEED=20            # 连续多少次（0.3s/次）检测到放电才停止轮询，约 6 秒
+IDLE_NEED=20            # 连续多少次（按 CHARGE_POLL 计）检测到放电才停止轮询
 
 # ---- 电量分档限流（保护电池，和温度档取更保守的那个）----
 # 锂电池 80% 以上内阻上升、嵌锂变慢，大电流会加剧锂析出（容量永久衰减）。
@@ -137,6 +140,16 @@ loadconf() {
   V=$(readconf MAX_CURRENT);     [ -n "$V" ] && MAX_CURRENT=$(numonly "$V")
   V=$(readconf IDLE_POLL);       [ -n "$V" ] && IDLE_POLL=$(numonly "$V")
   V=$(readconf IDLE_NEED);       [ -n "$V" ] && IDLE_NEED=$(numonly "$V")
+
+  # 充电轮询间隔：支持小数（0.2 / 0.3 / 1），但必须 > 0，否则回退默认
+  V=$(readconf CHARGE_POLL)
+  if [ -n "$V" ]; then
+    V=$(numdec "$V")
+    case "$V" in
+      ""|*[!0-9.]*) ;;                                   # 含非法字符，忽略
+      *) [ -n "$(echo "$V" | tr -d '.0')" ] && CHARGE_POLL="$V" ;;
+    esac
+  fi
   V=$(readconf ENABLE_SOC_GUARD);[ -n "$V" ] && ENABLE_SOC_GUARD=$(numonly "$V")
   V=$(readconf SOC_80);          [ -n "$V" ] && SOC_80=$(numonly "$V")
   V=$(readconf SOC_90);          [ -n "$V" ] && SOC_90=$(numonly "$V")
@@ -158,7 +171,7 @@ loadconf() {
 }
 
 loadconf
-log "===== worker 启动 ce=$ENABLE_CE thermal=$ENABLE_THERMAL 目标=${MAX_CURRENT}mA 档位=$CUR_A/$CUR_B/$CUR_C/$CUR_D | 电量保护=$ENABLE_SOC_GUARD 档位=$CUR_S80/$CUR_S90/$CUR_S95 | 停顿自查=${IDLE_POLL}s ====="
+log "===== worker 启动 ce=$ENABLE_CE thermal=$ENABLE_THERMAL 目标=${MAX_CURRENT}mA 档位=$CUR_A/$CUR_B/$CUR_C/$CUR_D | 电量保护=$ENABLE_SOC_GUARD 档位=$CUR_S80/$CUR_S90/$CUR_S95 | 充电轮询=${CHARGE_POLL}s 停顿自查=${IDLE_POLL}s ====="
 
 stop white_load_charge 2>/dev/null
 log "stop white_load_charge -> $(getprop init.svc.white_load_charge)"
@@ -282,5 +295,5 @@ while true; do
     log "再次 stop white_load_charge"
   fi
 
-  sleep 0.3
+  sleep "$CHARGE_POLL"
 done
