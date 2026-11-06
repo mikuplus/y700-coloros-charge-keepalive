@@ -73,6 +73,7 @@ while true; do
   WPID=$!
 
   RELOAD=0
+  BAK_OK=0
   while kill -0 "$WPID" 2>/dev/null; do
     sleep 2
     NH=$(hash_of "$WORKER")
@@ -84,6 +85,15 @@ while true; do
       kill -9 "$WPID" 2>/dev/null
       cleanup_children
       break
+    fi
+    # 跑满 30 秒仍存活且文件未被改动 → 认定这份是好的。
+    # 必须在运行期就存，不能等 worker 退出：worker 是常驻进程，
+    # 正常情况永远不退出，等退出再存等于永远不存。
+    if [ "$BAK_OK" = "0" ] && [ $(( $(date +%s) - START )) -ge 30 ]; then
+      if cp -f "$WORKER" "$BAK" 2>/dev/null; then
+        BAK_OK=1
+        log "worker 稳定运行 30s，已更新回滚备份"
+      fi
     fi
   done
 
@@ -114,12 +124,8 @@ while true; do
       fi
     fi
   else
+    # 备份已在上面的监控循环里、跑满 30 秒时就存好了，这里只需清掉失败计数
     FASTFAIL=0
-    # 正常跑满 30 秒，存为已知良好版本
-    if [ "$DUR" -ge 30 ]; then
-      cp -f "$WORKER" "$BAK"
-      log "worker 健康运行 ${DUR}s，已更新备份"
-    fi
   fi
 
   sleep 1
