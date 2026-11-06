@@ -18,6 +18,7 @@ FILES = [
     ("service.sh", 0o755),
     ("worker.sh", 0o755),
     ("config.prop", 0o644),
+    ("webroot/index.html", 0o644),
 ]
 
 OUT = "charge_keepalive_fix.zip"

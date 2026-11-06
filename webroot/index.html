@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>充电保活</title>
+<style>
+  :root{
+    --bg:#0e1116; --card:#181c23; --line:#262b34;
+    --txt:#e6e9ee; --dim:#8b93a1; --ok:#3ddc84; --warn:#ffb020; --bad:#ff5c5c;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{
+    margin:0;padding:16px 14px 28px;
+    background:var(--bg);color:var(--txt);
+    font-family:-apple-system,"PingFang SC","Noto Sans SC",system-ui,sans-serif;
+    font-size:14px;line-height:1.5;
+  }
+  header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+  h1{margin:0;font-size:16px;font-weight:600;letter-spacing:.2px}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--dim);transition:background .3s}
+  .dot.on{background:var(--ok);box-shadow:0 0 8px rgba(61,220,132,.6)}
+  .dot.err{background:var(--bad)}
+
+  .hero{
+    background:var(--card);border:1px solid var(--line);border-radius:16px;
+    padding:18px 16px;margin-bottom:12px;
+    display:flex;align-items:flex-end;justify-content:space-between;
+  }
+  .cap{font-size:44px;font-weight:300;line-height:1;letter-spacing:-1px;font-variant-numeric:tabular-nums}
+  .cap small{font-size:16px;color:var(--dim);margin-left:2px}
+  .st{font-size:13px;color:var(--dim);padding-bottom:6px}
+  .st.charging{color:var(--ok)}
+
+  .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px}
+  .card{
+    background:var(--card);border:1px solid var(--line);border-radius:12px;
+    padding:10px 8px;text-align:center;
+  }
+  .card label{display:block;font-size:11px;color:var(--dim);margin-bottom:3px}
+  .card b{font-size:16px;font-weight:500;font-variant-numeric:tabular-nums}
+  .card b i{font-size:10px;font-style:normal;color:var(--dim);margin-left:1px}
+
+  section{margin-bottom:14px}
+  h2{
+    font-size:11px;font-weight:500;color:var(--dim);
+    margin:0 0 6px 2px;letter-spacing:.6px;text-transform:uppercase;
+  }
+  pre{
+    margin:0;padding:11px 12px;
+    background:var(--card);border:1px solid var(--line);border-radius:12px;
+    font-family:ui-monospace,"SF Mono",Menlo,monospace;
+    font-size:11px;line-height:1.65;color:#b8c0cc;
+    white-space:pre-wrap;word-break:break-all;
+    max-height:220px;overflow-y:auto;
+  }
+  .foot{text-align:center;font-size:11px;color:#4a5260;margin-top:18px}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Y700 充电保活</h1>
+  <span id="dot" class="dot"></span>
+</header>
+
+<div class="hero">
+  <div class="cap"><span id="cap">--</span><small>%</small></div>
+  <div class="st" id="status">读取中</div>
+</div>
+
+<div class="grid">
+  <div class="card"><label>电流</label><b id="cur">--</b></div>
+  <div class="card"><label>功率</label><b id="pw">--</b></div>
+  <div class="card"><label>电压</label><b id="volt">--</b></div>
+  <div class="card"><label>电池温度</label><b id="temp">--</b></div>
+  <div class="card"><label>限流档</label><b id="cdev">--</b></div>
+  <div class="card"><label>限流上限</label><b id="fcc">--</b></div>
+</div>
+
+<section>
+  <h2>最近会话</h2>
+  <pre id="sess">--</pre>
+</section>
+
+<section>
+  <h2>日志</h2>
+  <pre id="log">--</pre>
+</section>
+
+<div class="foot" id="foot">每 2 秒刷新</div>
+
+<script>
+"use strict";
+
+// KernelSU / SukiSU WebUI 的 exec；不同分支签名略有差异，逐个尝试
+function sh(cmd) {
+  return new Promise(function (resolve) {
+    try {
+      if (typeof ksu !== "undefined" && typeof ksu.exec === "function") {
+        ksu.exec(cmd, function (errno, stdout) { resolve(stdout || ""); });
+      } else if (typeof exec === "function") {
+        exec(cmd, { cwd: "/" }, function (errno, stdout) { resolve(stdout || ""); });
+      } else {
+        resolve(null);
+      }
+    } catch (e) {
+      resolve(null);
+    }
+  });
+}
+
+var STATUS_CMD = [
+  'B=/sys/class/power_supply/battery;',
+  'CD="";',
+  'for c in /sys/class/thermal/cooling_device*; do',
+  '  [ "$(cat $c/type 2>/dev/null)" = "battery" ] && { CD=$c; break; };',
+  'done;',
+  'echo "$(cat $B/capacity 2>/dev/null)|$(cat $B/status 2>/dev/null)|',
+  '$(cat $B/current_now 2>/dev/null)|$(cat $B/voltage_now 2>/dev/null)|',
+  '$(cat $B/temp 2>/dev/null)|$(cat $B/charging_enable 2>/dev/null)|',
+  '$(cat $CD/cur_state 2>/dev/null)|$(cat $B/charge_control_limit 2>/dev/null)"'
+].join(" ");
+
+var $ = function (id) { return document.getElementById(id); };
+
+function setText(id, v) { var el = $(id); if (el) el.textContent = v; }
+
+function fmt(n, div, digits) {
+  var x = parseInt(n, 10);
+  if (isNaN(x)) return "--";
+  return (x / div).toFixed(digits);
+}
+
+function paint(raw) {
+  var f = raw.trim().split("|");
+  if (f.length < 8) { $("dot").className = "dot err"; setText("status", "读取失败"); return; }
+
+  var cap = parseInt(f[0], 10);
+  var st  = f[1];
+  var ia  = parseInt(f[2], 10);
+  var ua  = parseInt(f[3], 10);
+  var t   = parseInt(f[4], 10);
+  var ce  = f[5];
+  var cd  = f[6];
+  var fcc = parseInt(f[7], 10);
+
+  setText("cap", isNaN(cap) ? "--" : cap);
+
+  var charging = (ia < 0);
+  setText("status", st || "--");
+  $("status").className = "st" + (charging ? " charging" : "");
+
+  setText("cur", isNaN(ia) ? "--" : fmt(Math.abs(ia), 1e6, 2));
+  $("cur").innerHTML += isNaN(ia) ? "" : "<i>A</i>";
+
+  var w = (!isNaN(ia) && !isNaN(ua)) ? Math.abs(ia) * ua / 1e12 : NaN;
+  setText("pw", isNaN(w) ? "--" : w.toFixed(1));
+  $("pw").innerHTML += isNaN(w) ? "" : "<i>W</i>";
+
+  setText("volt", isNaN(ua) ? "--" : fmt(ua, 1e6, 2));
+  $("volt").innerHTML += isNaN(ua) ? "" : "<i>V</i>";
+
+  setText("temp", isNaN(t) ? "--" : (t / 10).toFixed(1));
+  $("temp").innerHTML += isNaN(t) ? "" : "<i>℃</i>";
+
+  setText("cdev", cd || "--");
+  setText("fcc", isNaN(fcc) ? "--" : fmt(fcc, 1e6, 2));
+  $("fcc").innerHTML += isNaN(fcc) ? "" : "<i>A</i>";
+
+  $("dot").className = "dot" + (charging ? " on" : "");
+
+  if (ce === "0" && charging) {
+    setText("status", (st || "") + " · ce=0");
+    $("status").className = "st";
+  }
+}
+
+async function tick() {
+  var raw = await sh(STATUS_CMD);
+  if (raw === null) {
+    $("dot").className = "dot err";
+    setText("status", "WebUI 不可用");
+    setText("foot", "无法调用 ksu.exec，可能当前管理器不支持 WebUI");
+    return;
+  }
+  paint(raw);
+
+  var sess = await sh("tail -5 /data/local/tmp/charge_sessions.csv 2>/dev/null");
+  setText("sess", (sess && sess.trim()) ? sess.trim() : "暂无记录");
+
+  var lg = await sh("tail -9 /data/local/tmp/charge_keepalive.log 2>/dev/null");
+  setText("log", (lg && lg.trim()) ? lg.trim() : "暂无日志");
+}
+
+tick();
+setInterval(tick, 2000);
+</script>
+</body>
+</html>

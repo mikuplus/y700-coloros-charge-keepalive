@@ -72,6 +72,9 @@ UCSI: handle_ucsi_read_ack: [LENOVO_UCSI] port_num=1, change=0x0040,
 | **绕过错误的 80% 上限** | 不再跟随 `charge_control_end_threshold`，按真实电量判断 |
 | **温度阶梯限流** | 接管 `cooling_device`，按电池温度 + 板级温度分档 |
 | **电量阶梯限流** | 80% 以上逐级降流，避免高 SOC 大电流 |
+| **档位自动标定** | 首次插电扫描冷却档位，记录每档真实的限流值 |
+| **充电会话统计** | 每次充电记录电量变化、平均功率、修复次数，输出 CSV |
+| **状态页** | KSU 管理器内打开，实时显示电流 / 温度 / 限流档 / 日志 |
 | **按需工作** | 只有真正在充电时才高频运行，其余时间静默 |
 
 ### 限流策略
@@ -178,6 +181,7 @@ SOC_A_95=1500000
 IDLE_POLL=5             # 不在充电时的巡检间隔（秒）
 IDLE_NEED=20            # 连续多少次放电才判定为"不在充电"
 CHARGE_POLL=0.3         # 充电时的轮询间隔（秒，支持小数 0.2 ~ 1.0）
+ENABLE_CALIBRATE=1      # 首次插电时自动标定冷却档位映射
 ```
 
 `CHARGE_POLL` 调大更省电，但 `charging_enable` 被打回后恢复更慢；调小反之。
@@ -202,6 +206,53 @@ cdev=/sys/class/thermal/cooling_device41 quiet=/sys/class/thermal/thermal_zone63
 ```
 
 以 `!!` 开头的行表示异常（语法错误、运行时崩溃等）。
+
+## 档位标定
+
+`cooling_device` 的 `cur_state` 和真实限流之间不是固定映射。实测同一档位：
+
+| cur_state | 电量 60% 时 | 电量 90% 时 |
+|---|---|---|
+| 12 | 7.0 A | 6.5 A |
+
+所以模块在**首次插电时**扫一遍 15 个档位，逐个读回 `charge_control_limit`，生成真实映射表，
+存到 `cdev_map.cache`，之后一直复用。
+
+- 耗时约 2 秒，期间电流会抖一下
+- 标定结果会做单调性校验（cur 越大限流必须越小），被内核干扰则不采用，继续用内置表
+- 想重新标定：删掉 `/data/adb/modules/charge_keepalive_fix/cdev_map.cache` 后重启模块
+- 不想要：`ENABLE_CALIBRATE=0`
+
+## 充电会话统计
+
+每次充电结束后往 `/data/local/tmp/charge_sessions.csv` 追加一行：
+
+```
+date,dur_min,cap_from,cap_to,avg_w,max_temp_0.1C,ce_fixes
+11-06 17:20,42,35%,78%,47,398,16
+```
+
+字段含义：起止时间、时长（分钟）、起止电量、平均充电功率、最高电池温度、期间修复 `charging_enable` 的次数。
+
+时长不足 60 秒的会话不记录（多半是插拔抖动）。文件超过 200 行会自动截断保留最近 120 行。
+
+这个数据能客观反映模块有没有起作用——比如 `ce_fixes` 从每小时上百次降到个位数，
+或者 `avg_w` 是否稳定。
+
+## 状态页
+
+模块带一个 KSU WebUI 页面（`webroot/index.html`）。装好模块后，在 KernelSU / SukiSU 管理器里
+进入模块详情，点「打开」即可。
+
+显示内容：
+
+- 电量、充电状态
+- 电流 / 功率 / 电压 / 电池温度
+- 当前限流档位与限流上限
+- 最近 5 条充电会话
+- 最近 9 行日志
+
+每 2 秒自动刷新。如果当前管理器不支持 WebUI，页面会提示 `ksu.exec` 不可用。
 
 ## 热更新与自动回滚
 

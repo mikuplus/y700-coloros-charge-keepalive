@@ -8,6 +8,8 @@ MODDIR=${0%/*}
 BAT=/sys/class/power_supply/battery
 USB=/sys/class/power_supply/usb
 LOG=/data/local/tmp/charge_keepalive.log
+CSV=/data/local/tmp/charge_sessions.csv
+CAL_FILE="$MODDIR/cdev_map.cache"
 CONF="$MODDIR/config.prop"
 
 log() { echo "$(date '+%m-%d %H:%M:%S') $*" >> "$LOG"; }
@@ -31,6 +33,7 @@ MAX_CURRENT=6000000     # 最低温档目标电流(mA)，自动映射到冷却�
 CHARGE_POLL=0.3         # 充电时多少秒轮询一次
 IDLE_POLL=5             # 没在充电时多少秒自查一次
 IDLE_NEED=20            # 连续多少次（按 CHARGE_POLL 计）检测到放电才停止轮询
+ENABLE_CALIBRATE=1      # 首次插电时自动标定 cooling 档位 → 限流映射
 
 # ---- 电量分档限流（保护电池，和温度档取更保守的那个）----
 # 锂电池 80% 以上内阻上升、嵌锂变慢，大电流会加剧锂析出（容量永久衰减）。
@@ -63,6 +66,96 @@ find_cur() {
   done
   [ -z "$BEST_CUR" ] && BEST_CUR=0
   echo "$BEST_CUR"
+}
+
+# 扫描冷却档位，读出每档真实的 charge_control_limit，生成映射表。
+# 同一 cur_state 在不同电量/温度下对应的限流并不固定（实测 12 档在 60% 时 7.0A、
+# 90% 时 6.5A），所以首次插电标定一次比硬编码更准。约 2 秒。
+calibrate_map() {
+  local cur lim prev map ok orig
+  [ -z "$CDEV" ] && return 1
+  orig=$(cat "$CDEV/cur_state" 2>/dev/null)
+  log "开始标定冷却档位映射（约 2 秒）..."
+  prev=99999999
+  ok=1
+  map=""
+  for cur in 0 2 4 6 8 10 12 13 14 15 16 17 18 19 20; do
+    echo "$cur" > "$CDEV/cur_state" 2>/dev/null
+    sleep 0.12
+    lim=$(numonly "$(cat "$BAT/charge_control_limit" 2>/dev/null)")
+    if [ -z "$lim" ]; then ok=0; break; fi
+    lim=$(( lim / 1000 ))
+    # 必须单调不增（cur 越大限流越小），否则说明被内核温控抢写了
+    [ "$lim" -gt "$prev" ] && ok=0
+    prev=$lim
+    map="$map $cur:$lim"
+  done
+  [ -n "$orig" ] && echo "$orig" > "$CDEV/cur_state" 2>/dev/null
+
+  if [ "$ok" = "1" ] && [ -n "$map" ]; then
+    map=${map# }
+    echo "$map" > "$CAL_FILE" 2>/dev/null
+    CDEV_MAP="$map"
+    log "标定成功: $map"
+    return 0
+  fi
+  log "标定失败（读数缺失或被内核干扰），沿用默认表"
+  return 1
+}
+
+# ---- 充电会话统计 ----
+SESS_ON=0
+SESS_T0=0
+SESS_CAP0=0
+SESS_FIX0=0
+SESS_TMAX=0
+SESS_WSUM=0
+SESS_N=0
+
+sess_begin() {
+  SESS_ON=1
+  SESS_T0=$(date +%s)
+  SESS_CAP0=$(cat "$BAT/capacity" 2>/dev/null); SESS_CAP0=${SESS_CAP0:-0}
+  SESS_FIX0=$FIX
+  SESS_TMAX=0
+  SESS_WSUM=0
+  SESS_N=0
+}
+
+sess_sample() {
+  local ib vb w
+  [ "$SESS_ON" = "1" ] || return 0
+  ib=$(cat "$BAT/current_now" 2>/dev/null); ib=${ib:-0}
+  # 只有真正在充电（电流为负）才计入平均功率，否则放电会把均值拉低
+  [ "$ib" -ge 0 ] && return 0
+  vb=$(cat "$BAT/voltage_now" 2>/dev/null); vb=${vb:-0}
+  ib=${ib#-}
+  # uA × uV → W
+  w=$(( ib * vb / 1000000000000 ))
+  SESS_WSUM=$(( SESS_WSUM + w ))
+  SESS_N=$(( SESS_N + 1 ))
+  [ "$TEMP" -gt "$SESS_TMAX" ] && SESS_TMAX=$TEMP
+}
+
+sess_end() {
+  local dur cap1 fixn avgw
+  [ "$SESS_ON" = "1" ] || return 0
+  SESS_ON=0
+  dur=$(( $(date +%s) - SESS_T0 ))
+  [ "$dur" -lt 60 ] && return 0            # 太短可能是插拔抖动，不记
+  cap1=$(cat "$BAT/capacity" 2>/dev/null); cap1=${cap1:-0}
+  fixn=$(( FIX - SESS_FIX0 ))
+  avgw=0
+  [ "$SESS_N" -gt 0 ] && avgw=$(( SESS_WSUM / SESS_N ))
+
+  [ -f "$CSV" ] || echo "date,dur_min,cap_from,cap_to,avg_w,max_temp_0.1C,ce_fixes" > "$CSV"
+  echo "$(date '+%m-%d %H:%M'),$(( dur / 60 )),${SESS_CAP0}%,${cap1}%,${avgw},${SESS_TMAX},${fixn}" >> "$CSV"
+  log "会话结束: ${dur}s ${SESS_CAP0}%→${cap1}% 均${avgw}W 峰温${SESS_TMAX} 修复${fixn}次"
+
+  # 防止无限增长
+  if [ "$(wc -l < "$CSV" 2>/dev/null)" -gt 200 ]; then
+    tail -120 "$CSV" > "$CSV.tmp" 2>/dev/null && mv -f "$CSV.tmp" "$CSV"
+  fi
 }
 
 # 判断「是否真的在充电」，即是否需要保活。
@@ -140,6 +233,7 @@ loadconf() {
   V=$(readconf MAX_CURRENT);     [ -n "$V" ] && MAX_CURRENT=$(numonly "$V")
   V=$(readconf IDLE_POLL);       [ -n "$V" ] && IDLE_POLL=$(numonly "$V")
   V=$(readconf IDLE_NEED);       [ -n "$V" ] && IDLE_NEED=$(numonly "$V")
+  V=$(readconf ENABLE_CALIBRATE);[ -n "$V" ] && ENABLE_CALIBRATE=$(numonly "$V")
 
   # 充电轮询间隔：支持小数（0.2 / 0.3 / 1），但必须 > 0，否则回退默认
   V=$(readconf CHARGE_POLL)
@@ -171,7 +265,6 @@ loadconf() {
 }
 
 loadconf
-log "===== worker 启动 ce=$ENABLE_CE thermal=$ENABLE_THERMAL 目标=${MAX_CURRENT}mA 档位=$CUR_A/$CUR_B/$CUR_C/$CUR_D | 电量保护=$ENABLE_SOC_GUARD 档位=$CUR_S80/$CUR_S90/$CUR_S95 | 充电轮询=${CHARGE_POLL}s 停顿自查=${IDLE_POLL}s ====="
 
 stop white_load_charge 2>/dev/null
 log "stop white_load_charge -> $(getprop init.svc.white_load_charge)"
@@ -190,12 +283,27 @@ done
 
 log "cdev=${CDEV:-未找到} quiet=${QZ:-未找到}"
 
+# 加载上次标定的档位映射（若存在），覆盖默认表后重算各档 cur_state
+CAL_LOADED=0
+if [ -f "$CAL_FILE" ]; then
+  _m=$(cat "$CAL_FILE" 2>/dev/null)
+  if [ -n "$_m" ]; then
+    CDEV_MAP="$_m"
+    CAL_LOADED=1
+    loadconf
+    log "已加载标定表: $CDEV_MAP"
+  fi
+fi
+
+log "===== worker 启动 ce=$ENABLE_CE thermal=$ENABLE_THERMAL 目标=${MAX_CURRENT}mA 档位=$CUR_A/$CUR_B/$CUR_C/$CUR_D | 电量保护=$ENABLE_SOC_GUARD 档位=$CUR_S80/$CUR_S90/$CUR_S95 | 充电轮询=${CHARGE_POLL}s 停顿自查=${IDLE_POLL}s | 标定=$([ "$CAL_LOADED" = 1 ] && echo 已加载 || echo 待首次插电) ====="
+
 LAST=""
 LASTMODE=""
 FIX=0
 N=0
 IDLE=0
 IDLE_CNT=0
+CAL_DONE=0
 LAST_IDLE_LOG=0
 LAST_WAKE_LOG=0
 
@@ -205,6 +313,7 @@ while true; do
     N=$((N+1))
     if [ "$IDLE" != "1" ]; then
       IDLE=1
+      sess_end
       NOWS=$(date +%s)
       # 日志节流：同类记录至少间隔 60 秒，避免状态抖动时刷屏
       if [ $((NOWS - LAST_IDLE_LOG)) -ge 60 ]; then
@@ -227,6 +336,15 @@ while true; do
 
   N=$((N+1))
   [ $((N % 10)) -eq 0 ] && loadconf
+
+  # 首次进入保活：开始统计会话；若还没标定过映射表，趁现在标一次
+  [ "$SESS_ON" = "0" ] && sess_begin
+  if [ "$CAL_DONE" = "0" ]; then
+    CAL_DONE=1
+    if [ "$ENABLE_CALIBRATE" = "1" ] && [ "$CAL_LOADED" = "0" ] && [ -n "$CDEV" ]; then
+      calibrate_map && loadconf
+    fi
+  fi
 
   TEMP=$(cat "$BAT/temp" 2>/dev/null); TEMP=${TEMP:-0}
   CAP=$(cat "$BAT/capacity" 2>/dev/null); CAP=${CAP:-0}
@@ -295,5 +413,6 @@ while true; do
     log "再次 stop white_load_charge"
   fi
 
+  sess_sample
   sleep "$CHARGE_POLL"
 done
