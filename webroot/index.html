@@ -29,7 +29,7 @@
   }
   .cap{font-size:44px;font-weight:300;line-height:1;letter-spacing:-1px;font-variant-numeric:tabular-nums}
   .cap small{font-size:16px;color:var(--dim);margin-left:2px}
-  .st{font-size:13px;color:var(--dim);padding-bottom:6px}
+  .st{font-size:13px;color:var(--dim);padding-bottom:6px;text-align:right}
   .st.charging{color:var(--ok)}
 
   .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px}
@@ -93,24 +93,62 @@
 <script>
 "use strict";
 
-// KernelSU / SukiSU WebUI 的 exec；不同分支签名略有差异，逐个尝试
-function sh(cmd) {
+var $ = function (id) { return document.getElementById(id); };
+function setText(id, v) {
+  var el = $(id);
+  if (el) el.textContent = (v === null || v === undefined) ? "" : String(v);
+}
+
+/* ------------------------------------------------------------------
+   KernelSU / SukiSU 的桥是 exec(cmd, optionsJson, callbackName)：
+   第三个参数是「全局函数名的字符串」，管理器执行完再去找 window[名字]
+   调用。直接传函数进来永远不会回调 —— 表现就是卡在"读取中"。
+------------------------------------------------------------------ */
+var cbSeq = 0;
+
+function sh(cmd, timeoutMs) {
   return new Promise(function (resolve) {
+    var bridge = (typeof window.ksu !== "undefined" && window.ksu &&
+                  typeof window.ksu.exec === "function") ? window.ksu : null;
+    if (!bridge && typeof exec !== "function") {
+      resolve({ ok: false, out: "", err: "no-bridge" });
+      return;
+    }
+
+    var name = "__cf_cb_" + (++cbSeq);
+    var settled = false;
+    var timer = setTimeout(function () {
+      if (settled) return;
+      settled = true;
+      try { delete window[name]; } catch (e) {}
+      resolve({ ok: false, out: "", err: "timeout" });
+    }, timeoutMs || 8000);
+
+    window[name] = function (errno, stdout, stderr) {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      try { delete window[name]; } catch (e) {}
+      resolve({ ok: Number(errno) === 0, out: stdout || "", err: stderr || "" });
+    };
+
     try {
-      if (typeof ksu !== "undefined" && typeof ksu.exec === "function") {
-        ksu.exec(cmd, function (errno, stdout) { resolve(stdout || ""); });
-      } else if (typeof exec === "function") {
-        exec(cmd, { cwd: "/" }, function (errno, stdout) { resolve(stdout || ""); });
-      } else {
-        resolve(null);
-      }
+      if (bridge) bridge.exec(cmd, "{}", name);
+      else exec(cmd, "{}", name);
     } catch (e) {
-      resolve(null);
+      if (!settled) {
+        settled = true;
+        clearTimeout(timer);
+        try { delete window[name]; } catch (e2) {}
+        resolve({ ok: false, out: "", err: String(e) });
+      }
     }
   });
 }
 
-var STATUS_CMD = [
+/* 一次 exec 拿全部数据，用 @@ 段标记切开。
+   2 秒一轮只调一次桥，比连发三条稳。 */
+var ALL_CMD = [
   'B=/sys/class/power_supply/battery;',
   'CD="";',
   'for c in /sys/class/thermal/cooling_device*; do',
@@ -119,12 +157,12 @@ var STATUS_CMD = [
   'echo "$(cat $B/capacity 2>/dev/null)|$(cat $B/status 2>/dev/null)|',
   '$(cat $B/current_now 2>/dev/null)|$(cat $B/voltage_now 2>/dev/null)|',
   '$(cat $B/temp 2>/dev/null)|$(cat $B/charging_enable 2>/dev/null)|',
-  '$(cat $CD/cur_state 2>/dev/null)|$(cat $B/charge_control_limit 2>/dev/null)"'
+  '$(cat $CD/cur_state 2>/dev/null)|$(cat $B/charge_control_limit 2>/dev/null)";',
+  'echo "@@SESS@@";',
+  'tail -5 /data/local/tmp/charge_sessions.csv 2>/dev/null;',
+  'echo "@@LOG@@";',
+  'tail -9 /data/local/tmp/charge_keepalive.log 2>/dev/null'
 ].join(" ");
-
-var $ = function (id) { return document.getElementById(id); };
-
-function setText(id, v) { var el = $(id); if (el) el.textContent = v; }
 
 function fmt(n, div, digits) {
   var x = parseInt(n, 10);
@@ -134,7 +172,7 @@ function fmt(n, div, digits) {
 
 function paint(raw) {
   var f = raw.trim().split("|");
-  if (f.length < 8) { $("dot").className = "dot err"; setText("status", "读取失败"); return; }
+  if (f.length < 8) { $("dot").className = "dot err"; setText("status", "读取失败"); return false; }
 
   var cap = parseInt(f[0], 10);
   var st  = f[1];
@@ -148,7 +186,9 @@ function paint(raw) {
   setText("cap", isNaN(cap) ? "--" : cap);
 
   var charging = (ia < 0);
-  setText("status", st || "--");
+  var label = st || "--";
+  if (ce === "0" && charging) label += " · ce=0";
+  setText("status", label);
   $("status").className = "st" + (charging ? " charging" : "");
 
   setText("cur", isNaN(ia) ? "--" : fmt(Math.abs(ia), 1e6, 2));
@@ -169,28 +209,47 @@ function paint(raw) {
   $("fcc").innerHTML += isNaN(fcc) ? "" : "<i>A</i>";
 
   $("dot").className = "dot" + (charging ? " on" : "");
-
-  if (ce === "0" && charging) {
-    setText("status", (st || "") + " · ce=0");
-    $("status").className = "st";
-  }
+  return true;
 }
 
-async function tick() {
-  var raw = await sh(STATUS_CMD);
-  if (raw === null) {
+var busy = false;
+
+function tick() {
+  if (busy) return;
+  busy = true;
+
+  sh(ALL_CMD, 8000).then(function (r) {
+    busy = false;
+
+    if (!r.ok && !r.out) {
+      $("dot").className = "dot err";
+      if (r.err === "no-bridge") {
+        setText("status", "管理器不支持 WebUI");
+        setText("foot", "找不到 ksu.exec / exec 接口");
+      } else if (r.err === "timeout") {
+        setText("status", "读取超时");
+        setText("foot", "exec 8 秒无回调，命令被阻塞");
+      } else {
+        setText("status", "读取失败");
+        setText("foot", (r.err || "未知错误").slice(0, 120));
+      }
+      return;
+    }
+
+    var seg = r.out.split("@@SESS@@");
+    var rest = (seg[1] || "").split("@@LOG@@");
+
+    if (paint(seg[0])) {
+      setText("sess", (rest[0] || "").trim() || "暂无记录");
+      setText("log", (rest[1] || "").trim() || "暂无日志");
+      setText("foot", "每 2 秒刷新");
+    }
+  }).catch(function (e) {
+    busy = false;
     $("dot").className = "dot err";
-    setText("status", "WebUI 不可用");
-    setText("foot", "无法调用 ksu.exec，可能当前管理器不支持 WebUI");
-    return;
-  }
-  paint(raw);
-
-  var sess = await sh("tail -5 /data/local/tmp/charge_sessions.csv 2>/dev/null");
-  setText("sess", (sess && sess.trim()) ? sess.trim() : "暂无记录");
-
-  var lg = await sh("tail -9 /data/local/tmp/charge_keepalive.log 2>/dev/null");
-  setText("log", (lg && lg.trim()) ? lg.trim() : "暂无日志");
+    setText("status", "脚本异常");
+    setText("foot", String(e).slice(0, 120));
+  });
 }
 
 tick();
