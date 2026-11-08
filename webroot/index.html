@@ -254,6 +254,30 @@
   .switch input:checked + .track{background:var(--primary-container)}
   .switch input:checked + .track::after{transform:translateX(20px);background:var(--on-primary-container)}
 
+  /* 进度条式滑块：粗轨道 + 左侧填充 + 竖线把手 */
+  input[type=range].bar{
+    height:46px;margin:8px 0 0;
+    --pct:50%;
+    --fill:var(--primary-container);
+    --empty:var(--bar-empty,rgba(255,255,255,.11));
+  }
+  input[type=range].bar::-webkit-slider-runnable-track{
+    height:26px;border-radius:13px;
+    background:linear-gradient(to right,
+      var(--fill) 0, var(--fill) var(--pct),
+      var(--empty) var(--pct), var(--empty) 100%);
+  }
+  input[type=range].bar::-webkit-slider-thumb{
+    -webkit-appearance:none;width:6px;height:46px;border-radius:3px;
+    background:var(--on-primary-container);border:none;
+    margin-top:-10px;box-shadow:0 0 6px rgba(0,0,0,.35);
+  }
+  .bar-ends{
+    display:flex;justify-content:space-between;
+    font-size:calc(11.5px*var(--txt));color:var(--on-surface-variant);
+    padding:0 2px 12px;
+  }
+
   .chips{display:flex;flex-wrap:wrap;gap:8px;padding:12px 0 6px}
   .tchip{
     border:1px solid var(--outline-variant);background:transparent;
@@ -392,7 +416,8 @@
         <span class="row-label">字体大小</span>
         <span class="row-value" id="txtVal">100%</span>
       </div>
-      <input type="range" id="txtRange" min="85" max="125" step="5" value="100">
+      <input type="range" id="txtRange" min="85" max="125" step="5" value="100" class="bar">
+      <div class="bar-ends"><span>更小</span><span>更大</span></div>
     </div>
 
     <div class="panel">
@@ -400,7 +425,8 @@
         <span class="row-label">全局缩放</span>
         <span class="row-value" id="spVal">100%</span>
       </div>
-      <input type="range" id="spRange" min="85" max="120" step="5" value="100">
+      <input type="range" id="spRange" min="85" max="120" step="5" value="100" class="bar">
+      <div class="bar-ends"><span>更小</span><span>更大</span></div>
       <p class="hint">同时缩放字号与卡片内边距。小屏嫌挤就往下调，平板远看就往上调。</p>
     </div>
 
@@ -761,6 +787,7 @@ function applyUiScale(c, sc) {
   var on = state.blur === 1;
   var dk = isDark();
   root.style.setProperty("--blur", on ? "22px" : "0px");
+  root.style.setProperty("--bar-empty", dk ? "rgba(255,255,255,0.11)" : "rgba(0,0,0,0.10)");
   /* 浅色背景本身很淡，卡片要更实一点，否则和背景糊成一片 */
   root.style.setProperty("--card-bg", on ? hexToRgba(c.surfaceContainer, dk ? 0.52 : 0.76) : c.surfaceContainer);
   root.style.setProperty("--hero-bg", on ? hexToRgba(c.primaryContainer, dk ? 0.7 : 0.95) : c.primaryContainer);
@@ -1073,6 +1100,12 @@ function buildCardChips() {
   syncCardChips();
 }
 
+function paintRange(el) {
+  var min = parseFloat(el.min), max = parseFloat(el.max), v = parseFloat(el.value);
+  var pct = ((v - min) / (max - min) * 100).toFixed(2) + "%";
+  el.style.setProperty("--pct", pct);
+}
+
 function syncDisplay() {
   var t = Math.round(state.txt * 100), g = Math.round(state.sp * 100);
   $("txtRange").value = t;
@@ -1080,6 +1113,8 @@ function syncDisplay() {
   setText("txtVal", t + "%");
   setText("spVal", g + "%");
   $("blurTgl").checked = state.blur === 1;
+  paintRange($("txtRange"));
+  paintRange($("spRange"));
 }
 
 function syncParams() {
@@ -1186,6 +1221,7 @@ document.querySelectorAll("#modeSeg button").forEach(function (b) {
 });
 
 $("txtRange").addEventListener("input", function () {
+  paintRange(this);
   state.txt = parseFloat(this.value) / 100;
   setText("txtVal", this.value + "%");
   applyTheme();
@@ -1193,6 +1229,7 @@ $("txtRange").addEventListener("input", function () {
 $("txtRange").addEventListener("change", saveAppearance);
 
 $("spRange").addEventListener("input", function () {
+  paintRange(this);
   state.sp = parseFloat(this.value) / 100;
   setText("spVal", this.value + "%");
   applyTheme();
