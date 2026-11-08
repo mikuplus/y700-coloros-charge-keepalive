@@ -123,6 +123,44 @@
   }
   .sw.custom input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;border:none;padding:0}
 
+  .picker{
+    margin:0 0 14px;padding:14px 14px 10px;border-radius:18px;
+    background:var(--surface-dim);
+    animation:pkIn .22s cubic-bezier(.2,0,0,1);
+  }
+  @keyframes pkIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+  .pk-top{display:flex;align-items:center;gap:11px;margin-bottom:8px}
+  .pk-chip{
+    width:40px;height:40px;flex:0 0 40px;border-radius:12px;
+    box-shadow:inset 0 0 0 1px rgba(128,128,128,.28);
+  }
+  .pk-hex{
+    flex:1;font-family:ui-monospace,Menlo,monospace;font-size:13px;
+    letter-spacing:.6px;color:var(--on-surface);font-variant-numeric:tabular-nums;
+  }
+  .pk-done{
+    border:none;border-radius:999px;padding:8px 17px;
+    background:var(--primary);color:var(--on-primary);
+    font-family:inherit;font-size:13px;font-weight:500;cursor:pointer;
+  }
+  .pk-done:active{transform:scale(.95)}
+  .pk-row{display:flex;align-items:center;gap:12px;padding:2px 0}
+  .pk-row>span{width:32px;flex:0 0 32px;font-size:12px;color:var(--on-surface-variant)}
+  .pk-row input[type=range]{flex:1;margin:0}
+
+  input[type=range].tinted{
+    height:24px;background-repeat:no-repeat;
+    background-position:50% 50%;background-size:100% 10px;
+  }
+  input[type=range].tinted::-webkit-slider-runnable-track{
+    height:10px;border-radius:99px;background:transparent;
+  }
+  input[type=range].tinted::-webkit-slider-thumb{
+    -webkit-appearance:none;width:18px;height:18px;border-radius:50%;
+    background:#fff;border:1px solid rgba(0,0,0,.18);
+    box-shadow:0 1px 4px rgba(0,0,0,.35);margin-top:-4px;
+  }
+
   .hex-in{
     width:122px;padding:9px 12px;border-radius:12px;
     border:1px solid var(--outline-variant);background:var(--surface-dim);
@@ -252,6 +290,21 @@
         <span class="row-value" id="seedName">莫奈紫</span>
       </div>
       <div class="swatches" id="swatches"></div>
+
+      <div class="picker" id="picker" hidden>
+        <div class="pk-top">
+          <span class="pk-chip" id="pkChip"></span>
+          <span class="pk-hex" id="pkHex">#6750A4</span>
+          <button class="pk-done" id="pkDone">完成</button>
+        </div>
+        <label class="pk-row"><span>色相</span>
+          <input type="range" id="pkH" min="0" max="360" step="1" class="tinted"></label>
+        <label class="pk-row"><span>饱和</span>
+          <input type="range" id="pkS" min="0" max="100" step="1" class="tinted"></label>
+        <label class="pk-row"><span>明暗</span>
+          <input type="range" id="pkL" min="0" max="100" step="1" class="tinted"></label>
+      </div>
+
       <div class="row">
         <span class="row-label">自定义色值</span>
         <input class="hex-in" id="hexInput" maxlength="9" spellcheck="false"
@@ -350,6 +403,34 @@ function oklch2rgb(L, C, H) {
 }
 function toHex(rgb) {
   return "#" + rgb.map(function (v) { return ("0" + v.toString(16)).slice(-2); }).join("");
+}
+
+/* 拾色器用 HSL 作为操作维度，比直接拧 OKLCH 的 L/C 直观 */
+function rgb2hsl(rgb) {
+  var r = rgb[0] / 255, g = rgb[1] / 255, b = rgb[2] / 255;
+  var mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+  var h = 0, s = 0, l = (mx + mn) / 2, d = mx - mn;
+  if (d > 0) {
+    s = l > 0.5 ? d / (2 - mx - mn) : d / (mx + mn);
+    if (mx === r) h = (g - b) / d + (g < b ? 6 : 0);
+    else if (mx === g) h = (b - r) / d + 2;
+    else h = (r - g) / d + 4;
+    h *= 60;
+  }
+  return { h: h, s: s * 100, l: l * 100 };
+}
+function hsl2hex(h, s, l) {
+  s /= 100; l /= 100;
+  var c = (1 - Math.abs(2 * l - 1)) * s;
+  var x = c * (1 - Math.abs((h / 60) % 2 - 1));
+  var m = l - c / 2, r = 0, g = 0, b = 0;
+  if (h < 60) { r = c; g = x; }
+  else if (h < 120) { r = x; g = c; }
+  else if (h < 180) { g = c; b = x; }
+  else if (h < 240) { g = x; b = c; }
+  else if (h < 300) { r = x; b = c; }
+  else { r = c; b = x; }
+  return toHex([Math.round((r + m) * 255), Math.round((g + m) * 255), Math.round((b + m) * 255)]);
 }
 function chromaK(t) {
   if (t >= 100) return 0;
@@ -556,6 +637,46 @@ function seedDim() {
   return 0;
 }
 
+/* ---- 内嵌拾色器：替代系统 input[type=color] 那个灰扑扑的对话框 ---- */
+var pk = { h: 0, s: 0, l: 0 };
+
+function syncPicker(skipValues) {
+  if (!skipValues) {
+    $("pkH").value = Math.round(pk.h);
+    $("pkS").value = Math.round(pk.s);
+    $("pkL").value = Math.round(pk.l);
+  }
+  var hex = hsl2hex(pk.h, pk.s, pk.l);
+  $("pkChip").style.background = hex;
+  $("pkHex").textContent = hex.toUpperCase();
+
+  $("pkH").style.backgroundImage =
+    "linear-gradient(to right,#f00 0%,#ff0 16.7%,#0f0 33.3%,#0ff 50%,#00f 66.7%,#f0f 83.3%,#f00 100%)";
+  $("pkS").style.backgroundImage =
+    "linear-gradient(to right,hsl(" + pk.h + ",0%," + pk.l + "%),hsl(" + pk.h + ",100%," + pk.l + "%))";
+  $("pkL").style.backgroundImage =
+    "linear-gradient(to right,#000,hsl(" + pk.h + "," + pk.s + "%,50%),#fff)";
+}
+
+function togglePicker() {
+  var el = $("picker");
+  if (!el.hidden) { el.hidden = true; return; }
+  var hsl = rgb2hsl(hex2rgb(state.seed));
+  pk.h = hsl.h; pk.s = hsl.s; pk.l = hsl.l;
+  el.hidden = false;
+  syncPicker();
+}
+
+function onPkInput() {
+  pk.h = parseFloat($("pkH").value);
+  pk.s = parseFloat($("pkS").value);
+  pk.l = parseFloat($("pkL").value);
+  state.seed = hsl2hex(pk.h, pk.s, pk.l);
+  syncPicker(true);
+  applyTheme();
+  syncSwatches();
+}
+
 /* 接受 #RGB / #RRGGBB / #AARRGGBB（Android 习惯，取后 6 位），无效返回 null */
 function normHex(v) {
   v = String(v).trim().replace(/\s+/g, "").replace(/^#/, "");
@@ -689,15 +810,13 @@ function buildSwatches() {
     html += '<button class="sw" data-seed="' + p.hex + '" aria-label="' + p.name +
             '" style="background:' + p.hex + '"></button>';
   });
-  html += '<label class="sw custom" aria-label="自定义颜色">' +
-          '<input type="color" id="customSeed" value="' + state.seed + '"></label>';
+  html += '<button class="sw custom" id="btnCustom" aria-label="自定义颜色"></button>';
   box.innerHTML = html;
 
   box.querySelectorAll("[data-seed]").forEach(function (b) {
     b.addEventListener("click", function () { pickSeed(b.getAttribute("data-seed")); });
   });
-  var custom = box.querySelector("#customSeed");
-  if (custom) custom.addEventListener("input", function () { pickSeed(this.value); });
+  $("btnCustom").addEventListener("click", togglePicker);
   syncSwatches();
 }
 
@@ -721,6 +840,9 @@ function pickSeed(hex) {
   applyTheme();
   syncSwatches();
   saveAppearance();
+  /* 从色板选色时把拾色器收起来，免得滑块还停在旧值上 */
+  var p = $("picker");
+  if (p && !p.hidden) p.hidden = true;
 }
 
 function syncMode() {
@@ -849,6 +971,17 @@ hexEl.addEventListener("change", function () {
 
 hexEl.addEventListener("keydown", function (e) {
   if (e.key === "Enter" || e.keyCode === 13) this.blur();
+});
+
+["pkH", "pkS", "pkL"].forEach(function (id) {
+  var el = $(id);
+  el.addEventListener("input", onPkInput);
+  el.addEventListener("change", function () { saveAppearance(); });
+});
+
+$("pkDone").addEventListener("click", function () {
+  $("picker").hidden = true;
+  saveAppearance();
 });
 
 $("dualCell").addEventListener("change", function () {
