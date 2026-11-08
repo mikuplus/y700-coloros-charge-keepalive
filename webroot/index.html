@@ -571,7 +571,10 @@ function buildScheme(seedHex, dim) {
     },
     dark: {
       glowA: T(24), glowB: T(31),
-      primary: Td(80), onPrimary: T(20),
+      /* 深色模式标准用 tone 80，但红系在这个高度会发橘（#f0919b 珊瑚粉）。
+         压到 tone 55 才是酒红，底色变深后文字要转浅。 */
+      primary: d > 0 ? toneOf(pal, 55, 1.6) : Td(80),
+      onPrimary: d > 0 ? T(98) : T(20),
       primaryContainer: Td(30), onPrimaryContainer: T(90),
       surface: N(7), surfaceDim: N(22),
       surfaceContainer: N(12), surfaceContainerHigh: N(17),
@@ -787,8 +790,8 @@ function swatchColor(p) {
   var pal = rgb2oklch(hex2rgb(p.hex));
   var d = p.dim || 0;
   var sat = d > 0 ? 1.6 : 1;
-  return isDark() ? toneOf(pal, Math.max(0, 80 - d), sat)
-                  : toneOf(pal, Math.max(0, 40 - d), sat);
+  if (isDark()) return d > 0 ? toneOf(pal, 55, 1.6) : toneOf(pal, 80, 1);
+  return d > 0 ? toneOf(pal, 32, 1.6) : toneOf(pal, 40, 1);
 }
 
 function paintSwatchColors() {
