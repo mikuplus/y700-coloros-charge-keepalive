@@ -1,154 +1,430 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-mode="dark">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
 <title>充电保活</title>
 <style>
-  :root{
-    --bg:#0e1116; --card:#181c23; --line:#262b34;
-    --txt:#e6e9ee; --dim:#8b93a1; --ok:#3ddc84; --warn:#ffb020; --bad:#ff5c5c;
-  }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html{background:var(--surface);transition:background .3s}
   body{
-    margin:0;padding:16px 14px 28px;
-    background:var(--bg);color:var(--txt);
+    margin:0;padding:0;
+    background:var(--surface);color:var(--on-surface);
     font-family:-apple-system,"PingFang SC","Noto Sans SC",system-ui,sans-serif;
     font-size:14px;line-height:1.5;
+    -webkit-font-smoothing:antialiased;
   }
-  header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
-  h1{margin:0;font-size:16px;font-weight:600;letter-spacing:.2px}
-  .dot{width:8px;height:8px;border-radius:50%;background:var(--dim);transition:background .3s}
-  .dot.on{background:var(--ok);box-shadow:0 0 8px rgba(61,220,132,.6)}
-  .dot.err{background:var(--bad)}
+  #app{max-width:720px;margin:0 auto;padding:0 16px 40px;position:relative;overflow:hidden}
 
+  /* ---------- 页面切换 ---------- */
+  .page{transition:transform .32s cubic-bezier(.2,0,0,1),opacity .28s}
+  #p-set{
+    position:fixed;inset:0;max-width:720px;margin:0 auto;
+    padding:0 16px 40px;background:var(--surface);
+    transform:translateX(100%);opacity:0;pointer-events:none;
+    overflow-y:auto;z-index:10;
+    transition:transform .32s cubic-bezier(.2,0,0,1),opacity .28s;
+  }
+  body.setting{overflow:hidden}
+  body.setting #p-home{transform:translateX(-18%);opacity:.4}
+  body.setting #p-set{transform:translateX(0);opacity:1;pointer-events:auto}
+
+  /* ---------- 顶栏 ---------- */
+  .topbar{display:flex;align-items:center;gap:12px;padding:20px 0 16px}
+  .topbar h1{margin:0;font-size:23px;font-weight:600;letter-spacing:-.2px}
+  .topbar .grow{flex:1}
+  .sub{margin:2px 0 0;font-size:12.5px;color:var(--on-surface-variant)}
+  .icon-btn{
+    width:44px;height:44px;flex:0 0 44px;
+    display:grid;place-items:center;
+    border:none;border-radius:50%;
+    background:var(--surface-container-high);color:var(--on-surface);
+    cursor:pointer;transition:background .2s,transform .12s;
+  }
+  .icon-btn:active{transform:scale(.92)}
+  .icon-btn svg{display:block}
+
+  /* ---------- Hero ---------- */
   .hero{
-    background:var(--card);border:1px solid var(--line);border-radius:16px;
-    padding:18px 16px;margin-bottom:12px;
-    display:flex;align-items:flex-end;justify-content:space-between;
+    background:var(--primary-container);color:var(--on-primary-container);
+    border-radius:28px;padding:24px 22px;
+    display:flex;align-items:center;justify-content:space-between;gap:16px;
+    margin-bottom:14px;transition:background .3s;
   }
-  .cap{font-size:44px;font-weight:300;line-height:1;letter-spacing:-1px;font-variant-numeric:tabular-nums}
-  .cap small{font-size:16px;color:var(--dim);margin-left:2px}
-  .st{font-size:13px;color:var(--dim);padding-bottom:6px;text-align:right}
-  .st.charging{color:var(--ok)}
+  .cap-wrap{display:flex;align-items:baseline}
+  .cap{font-size:52px;font-weight:300;line-height:.95;letter-spacing:-2px;font-variant-numeric:tabular-nums}
+  .pct{font-size:20px;margin-left:3px;opacity:.65}
+  .hero-right{text-align:right;display:flex;flex-direction:column;gap:6px;align-items:flex-end}
+  .chip{
+    display:inline-flex;align-items:center;gap:6px;
+    background:rgba(0,0,0,.12);border-radius:999px;
+    padding:5px 12px;font-size:12.5px;font-weight:500;
+    white-space:nowrap;
+  }
+  html[data-mode="dark"] .chip{background:rgba(255,255,255,.15)}
+  .chip .led{width:6px;height:6px;border-radius:50%;background:currentColor;opacity:.45}
+  .chip.on .led{opacity:1;box-shadow:0 0 8px currentColor}
+  .hero-note{font-size:11.5px;opacity:.7}
 
-  .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px}
+  /* ---------- 指标 ---------- */
+  .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:18px}
+  @media(max-width:420px){.grid{grid-template-columns:repeat(2,1fr)}}
   .card{
-    background:var(--card);border:1px solid var(--line);border-radius:12px;
-    padding:10px 8px;text-align:center;
+    background:var(--surface-container);border-radius:20px;
+    padding:14px 12px;transition:background .3s;
   }
-  .card label{display:block;font-size:11px;color:var(--dim);margin-bottom:3px}
-  .card b{font-size:16px;font-weight:500;font-variant-numeric:tabular-nums}
-  .card b i{font-size:10px;font-style:normal;color:var(--dim);margin-left:1px}
+  .card .k{font-size:11.5px;color:var(--on-surface-variant);margin-bottom:5px}
+  .card .v{font-size:19px;font-weight:500;font-variant-numeric:tabular-nums;letter-spacing:-.3px}
+  .card .v small{font-size:11px;font-weight:400;color:var(--on-surface-variant);margin-left:2px}
+  .card .v.accent{color:var(--primary)}
 
-  section{margin-bottom:14px}
-  h2{
-    font-size:11px;font-weight:500;color:var(--dim);
-    margin:0 0 6px 2px;letter-spacing:.6px;text-transform:uppercase;
-  }
+  /* ---------- 区块 ---------- */
+  .block{margin-bottom:18px}
+  .block h2{margin:0 0 8px 4px;font-size:12.5px;font-weight:600;color:var(--on-surface-variant);letter-spacing:.3px}
   pre{
-    margin:0;padding:11px 12px;
-    background:var(--card);border:1px solid var(--line);border-radius:12px;
+    margin:0;padding:14px 15px;
+    background:var(--surface-container);border-radius:18px;
     font-family:ui-monospace,"SF Mono",Menlo,monospace;
-    font-size:11px;line-height:1.65;color:#b8c0cc;
+    font-size:11.5px;line-height:1.7;color:var(--on-surface-variant);
     white-space:pre-wrap;word-break:break-all;
-    max-height:220px;overflow-y:auto;
+    max-height:190px;overflow-y:auto;
+    transition:background .3s;
   }
-  .foot{text-align:center;font-size:11px;color:#4a5260;margin-top:18px}
+
+  /* ---------- 设置页 ---------- */
+  .group{
+    margin:22px 0 10px 4px;font-size:12.5px;font-weight:600;
+    color:var(--primary);letter-spacing:.4px;
+  }
+  .panel{
+    background:var(--surface-container);border-radius:22px;
+    padding:6px 18px;margin-bottom:10px;transition:background .3s;
+  }
+  .row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 0}
+  .row + .row{border-top:1px solid var(--outline-variant)}
+  .row-label{font-size:14px}
+  .row-value{font-size:13px;color:var(--on-surface-variant);font-variant-numeric:tabular-nums}
+  .row-value.mono{font-family:ui-monospace,Menlo,monospace;font-size:11.5px}
+
+  .swatches{display:grid;grid-template-columns:repeat(9,1fr);gap:9px;padding:6px 0 18px;max-width:440px}
+  .sw{
+    aspect-ratio:1;border-radius:50%;border:none;cursor:pointer;
+    position:relative;transition:transform .15s;padding:0;
+    box-shadow:inset 0 0 0 1px rgba(128,128,128,.16);
+  }
+  .sw:active{transform:scale(.88)}
+  .sw[aria-pressed="true"]::after{
+    content:"";position:absolute;inset:-5px;
+    border:2px solid var(--primary);border-radius:50%;
+  }
+  .sw.custom{
+    background:conic-gradient(#e57373,#ffb74d,#fff176,#81c784,#4fc3f7,#9575cd,#e57373);
+  }
+  .sw.custom input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;border:none;padding:0}
+
+  .segmented{
+    display:flex;gap:4px;background:var(--surface-dim);
+    border-radius:999px;padding:4px;margin:0 0 16px;
+  }
+  .segmented button{
+    flex:1;border:none;background:transparent;color:var(--on-surface-variant);
+    font-family:inherit;font-size:13px;padding:9px 0;border-radius:999px;
+    cursor:pointer;transition:background .2s,color .2s;
+  }
+  .segmented button[aria-pressed="true"]{
+    background:var(--primary);color:var(--on-primary);font-weight:500;
+  }
+
+  input[type=range]{
+    -webkit-appearance:none;appearance:none;
+    width:100%;height:26px;background:transparent;margin:0 0 8px;cursor:pointer;display:block;
+  }
+  input[type=range]::-webkit-slider-runnable-track{
+    height:6px;border-radius:99px;background:var(--outline-variant);
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none;width:20px;height:20px;border-radius:50%;
+    background:var(--primary);border:2px solid var(--surface);
+    margin-top:-7px;box-shadow:0 1px 4px rgba(0,0,0,.22);
+  }
+  .hint{margin:0 0 14px;font-size:11.5px;color:var(--on-surface-variant);opacity:.85}
+
+  /* ---------- toast ---------- */
+  #toast{
+    position:fixed;left:50%;bottom:36px;transform:translate(-50%,20px);
+    background:var(--on-surface);color:var(--surface);
+    padding:11px 20px;border-radius:999px;font-size:13px;
+    opacity:0;pointer-events:none;transition:opacity .22s,transform .22s;z-index:99;
+  }
+  #toast.show{opacity:1;transform:translate(-50%,0)}
 </style>
 </head>
 <body>
 
-<header>
-  <h1>Y700 充电保活</h1>
-  <span id="dot" class="dot"></span>
-</header>
+<div id="app">
+  <!-- ============ 主页 ============ -->
+  <section class="page" id="p-home">
+    <header class="topbar">
+      <div class="grow">
+        <h1>充电保活</h1>
+        <p class="sub" id="sub">正在读取…</p>
+      </div>
+      <button class="icon-btn" id="btn-settings" aria-label="设置">
+        <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3.1"/>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+        </svg>
+      </button>
+    </header>
 
-<div class="hero">
-  <div class="cap"><span id="cap">--</span><small>%</small></div>
-  <div class="st" id="status">读取中</div>
+    <div class="hero">
+      <div class="cap-wrap">
+        <span class="cap" id="cap">--</span><span class="pct">%</span>
+      </div>
+      <div class="hero-right">
+        <span class="chip" id="state"><i class="led"></i><span id="state-txt">读取中</span></span>
+        <span class="hero-note" id="note"></span>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="card"><div class="k">功率</div><div class="v accent"><span id="pw">--</span><small>W</small></div></div>
+      <div class="card"><div class="k">电流</div><div class="v"><span id="cur">--</span><small>A</small></div></div>
+      <div class="card"><div class="k">电压</div><div class="v"><span id="volt">--</span><small>V</small></div></div>
+      <div class="card"><div class="k">电池温度</div><div class="v"><span id="temp">--</span><small>℃</small></div></div>
+      <div class="card"><div class="k">限流档</div><div class="v"><span id="cdev">--</span></div></div>
+      <div class="card"><div class="k">限流上限</div><div class="v"><span id="fcc">--</span><small>A</small></div></div>
+    </div>
+
+    <section class="block">
+      <h2>最近会话</h2>
+      <pre id="sess">--</pre>
+    </section>
+
+    <section class="block">
+      <h2>日志</h2>
+      <pre id="log">--</pre>
+    </section>
+  </section>
+
+  <!-- ============ 设置页 ============ -->
+  <section class="page" id="p-set">
+    <header class="topbar">
+      <button class="icon-btn" id="btn-back" aria-label="返回">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M15 18l-6-6 6-6"/>
+        </svg>
+      </button>
+      <h1>设置</h1>
+      <div class="grow"></div>
+    </header>
+
+    <h2 class="group">外观</h2>
+    <div class="panel">
+      <div class="row">
+        <span class="row-label">主题色</span>
+        <span class="row-value" id="seedName">莫奈紫</span>
+      </div>
+      <div class="swatches" id="swatches"></div>
+    </div>
+
+    <div class="panel">
+      <div class="row"><span class="row-label">明暗模式</span></div>
+      <div class="segmented" id="modeSeg">
+        <button data-mode="auto">跟随系统</button>
+        <button data-mode="light">浅色</button>
+        <button data-mode="dark">深色</button>
+      </div>
+    </div>
+
+    <h2 class="group">模块参数</h2>
+    <div class="panel">
+      <div class="row">
+        <span class="row-label">最大充电电流</span>
+        <span class="row-value" id="curVal">--</span>
+      </div>
+      <input type="range" id="maxCur" min="1" max="13" step="0.5" value="6">
+      <p class="hint">硬件是离散档位（13/12.5/11.5/10.5/9.5/8.5/7/6/5/4/3/2.5/2/1.5/0.5A），实际取不低于目标值的最小档。</p>
+    </div>
+
+    <div class="panel">
+      <div class="row">
+        <span class="row-label">充电轮询间隔</span>
+        <span class="row-value" id="pollVal">--</span>
+      </div>
+      <input type="range" id="chargePoll" min="0.1" max="1" step="0.1" value="0.3">
+      <p class="hint">调大更省电，但 charging_enable 被打回后恢复更慢。改完约 3 秒生效。</p>
+    </div>
+
+    <h2 class="group">关于</h2>
+    <div class="panel">
+      <div class="row"><span class="row-label">模块版本</span><span class="row-value" id="ver">--</span></div>
+      <div class="row"><span class="row-label">配置</span><span class="row-value mono">config.prop</span></div>
+      <div class="row"><span class="row-label">会话记录</span><span class="row-value mono">charge_sessions.csv</span></div>
+    </div>
+    <p class="hint" style="margin:10px 4px 0">
+      配色由种子色经 OKLCH 生成 Material You 色盘，与系统壁纸取色相互独立。
+    </p>
+  </section>
 </div>
 
-<div class="grid">
-  <div class="card"><label>电流</label><b id="cur">--</b></div>
-  <div class="card"><label>功率</label><b id="pw">--</b></div>
-  <div class="card"><label>电压</label><b id="volt">--</b></div>
-  <div class="card"><label>电池温度</label><b id="temp">--</b></div>
-  <div class="card"><label>限流档</label><b id="cdev">--</b></div>
-  <div class="card"><label>限流上限</label><b id="fcc">--</b></div>
-</div>
-
-<section>
-  <h2>最近会话</h2>
-  <pre id="sess">--</pre>
-</section>
-
-<section>
-  <h2>日志</h2>
-  <pre id="log">--</pre>
-</section>
-
-<div class="foot" id="foot">每 2 秒刷新</div>
+<div id="toast"></div>
 
 <script>
 "use strict";
 
-var $ = function (id) { return document.getElementById(id); };
-function setText(id, v) {
-  var el = $(id);
-  if (el) el.textContent = (v === null || v === undefined) ? "" : String(v);
+/* ============================================================
+   1. 色彩引擎：sRGB → OKLab → OKLCH → M3 色盘
+   ============================================================ */
+function hex2rgb(h) {
+  h = h.replace("#", "");
+  if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
+  return [parseInt(h.slice(0,2),16), parseInt(h.slice(2,4),16), parseInt(h.slice(4,6),16)];
+}
+function lin(c) { c /= 255; return c <= 0.04045 ? c/12.92 : Math.pow((c+0.055)/1.055, 2.4); }
+function gam(c) {
+  c = c <= 0.0031308 ? c*12.92 : 1.055*Math.pow(c, 1/2.4) - 0.055;
+  return Math.max(0, Math.min(255, Math.round(c*255)));
+}
+function rgb2oklch(rgb) {
+  var r = lin(rgb[0]), g = lin(rgb[1]), b = lin(rgb[2]);
+  var l = Math.cbrt(0.4122214708*r + 0.5363325363*g + 0.0514459929*b);
+  var m = Math.cbrt(0.2119034982*r + 0.6806995451*g + 0.1073969566*b);
+  var s = Math.cbrt(0.0883024619*r + 0.2817188376*g + 0.6299787005*b);
+  var L = 0.2104542553*l + 0.7936177850*m - 0.0040720468*s;
+  var A = 1.9779984951*l - 2.4285922050*m + 0.4505937099*s;
+  var B = 0.0259040371*l + 0.7827717662*m - 0.8086757660*s;
+  var C = Math.sqrt(A*A + B*B), H = Math.atan2(B, A) * 180 / Math.PI;
+  if (H < 0) H += 360;
+  return { L: L, C: C, H: H };
+}
+function oklch2rgb(L, C, H) {
+  var a = C * Math.cos(H * Math.PI/180), b = C * Math.sin(H * Math.PI/180);
+  var l_ = L + 0.3963377774*a + 0.2158037573*b;
+  var m_ = L - 0.1055613458*a - 0.0638541728*b;
+  var s_ = L - 0.0894841775*a - 1.2914855480*b;
+  var l = l_*l_*l_, m = m_*m_*m_, s = s_*s_*s_;
+  return [
+    gam( 4.0767416621*l - 3.3077115913*m + 0.2309699292*s),
+    gam(-1.2684380046*l + 2.6097574011*m - 0.3413193965*s),
+    gam(-0.0041960863*l - 0.7034186147*m + 1.7076147010*s)
+  ];
+}
+function toHex(rgb) {
+  return "#" + rgb.map(function (v) { return ("0" + v.toString(16)).slice(-2); }).join("");
+}
+function chromaK(t) {
+  if (t >= 100) return 0;
+  if (t >= 95) return 0.12;
+  if (t >= 90) return 0.35;
+  if (t >= 80) return 0.55;
+  if (t >= 60) return 0.85;
+  if (t >= 30) return 1.0;
+  return 0.62;
+}
+function toneOf(pal, t, scale) {
+  /* M3 的 tone 是 CIE L*，OKLab 的 L ≈ (L*+16)/116。
+     直接用 t/100 会让暗色过黑、主色过深。 */
+  var L = (t + 16) / 116;
+  return toHex(oklch2rgb(L, pal.C * chromaK(t) * (scale === undefined ? 1 : scale), pal.H));
+}
+function buildScheme(seedHex) {
+  var pal = rgb2oklch(hex2rgb(seedHex));
+  var T = function (t) { return toneOf(pal, t); };
+  /* 表面与文字走中性色盘，饱和度压到 15%，否则灰会透出紫/蓝 */
+  var N = function (t) { return toneOf(pal, t, 0.15); };
+  return {
+    light: {
+      primary: T(40), onPrimary: T(100),
+      primaryContainer: T(90), onPrimaryContainer: T(10),
+      surface: N(98), surfaceDim: N(90),
+      surfaceContainer: N(94), surfaceContainerHigh: N(90),
+      onSurface: N(10), onSurfaceVariant: N(30),
+      outlineVariant: N(80)
+    },
+    dark: {
+      primary: T(80), onPrimary: T(20),
+      primaryContainer: T(30), onPrimaryContainer: T(90),
+      surface: N(7), surfaceDim: N(22),
+      surfaceContainer: N(12), surfaceContainerHigh: N(17),
+      onSurface: N(90), onSurfaceVariant: N(80),
+      outlineVariant: N(30)
+    }
+  };
 }
 
-/* ------------------------------------------------------------------
-   KernelSU / SukiSU 的桥是 exec(cmd, optionsJson, callbackName)：
-   第三个参数是「全局函数名的字符串」，管理器执行完再去找 window[名字]
-   调用。直接传函数进来永远不会回调 —— 表现就是卡在"读取中"。
------------------------------------------------------------------- */
-var cbSeq = 0;
+/* ============================================================
+   2. 桥：SukiSU 的 exec 返回 Promise，老 KernelSU 走回调函数名
+   ============================================================ */
+var seq = 0;
+
+function getBridge() {
+  if (typeof ksu !== "undefined" && ksu && typeof ksu.exec === "function") {
+    return function (cmd, opts, name) { return ksu.exec(cmd, opts, name); };
+  }
+  if (typeof exec === "function") {
+    return function (cmd, opts, name) { return exec(cmd, opts, name); };
+  }
+  return null;
+}
 
 function sh(cmd, timeoutMs) {
   return new Promise(function (resolve) {
-    var bridge = (typeof window.ksu !== "undefined" && window.ksu &&
-                  typeof window.ksu.exec === "function") ? window.ksu : null;
-    if (!bridge && typeof exec !== "function") {
-      resolve({ ok: false, out: "", err: "no-bridge" });
-      return;
-    }
+    var call = getBridge();
+    if (!call) { resolve({ ok: false, out: "", err: "no-bridge" }); return; }
 
-    var name = "__cf_cb_" + (++cbSeq);
-    var settled = false;
+    var done = false;
+    var name = "__cf_cb_" + (++seq);
+
     var timer = setTimeout(function () {
-      if (settled) return;
-      settled = true;
+      if (done) return;
+      done = true;
       try { delete window[name]; } catch (e) {}
       resolve({ ok: false, out: "", err: "timeout" });
     }, timeoutMs || 8000);
 
-    window[name] = function (errno, stdout, stderr) {
-      if (settled) return;
-      settled = true;
+    function finish(v) {
+      if (done) return;
+      done = true;
       clearTimeout(timer);
       try { delete window[name]; } catch (e) {}
-      resolve({ ok: Number(errno) === 0, out: stdout || "", err: stderr || "" });
+      resolve(v);
+    }
+
+    /* 老 KernelSU：执行完管理器去找 window[name] 调用 */
+    window[name] = function (errno, out, err) {
+      finish({ ok: Number(errno) === 0, out: out || "", err: err || "" });
     };
 
+    var ret;
     try {
-      if (bridge) bridge.exec(cmd, "{}", name);
-      else exec(cmd, "{}", name);
+      ret = call(cmd, "{}", name);
     } catch (e) {
-      if (!settled) {
-        settled = true;
-        clearTimeout(timer);
-        try { delete window[name]; } catch (e2) {}
-        resolve({ ok: false, out: "", err: String(e) });
-      }
+      try { ret = call(cmd); } catch (e2) { return finish({ ok: false, out: "", err: String(e2) }); }
+    }
+
+    /* SukiSU：直接返回 Promise，忽略后两个参数 */
+    if (ret && typeof ret.then === "function") {
+      ret.then(function (v) {
+        if (v && typeof v === "object") {
+          finish({ ok: Number(v.errno) === 0, out: v.stdout || "", err: v.stderr || "" });
+        } else if (typeof v === "string") {
+          finish({ ok: true, out: v, err: "" });
+        } else {
+          finish({ ok: false, out: "", err: "bad-return" });
+        }
+      })["catch"](function (e) { finish({ ok: false, out: "", err: String(e) }); });
     }
   });
 }
 
-/* 一次 exec 拿全部数据，用 @@ 段标记切开。
-   2 秒一轮只调一次桥，比连发三条稳。 */
-var ALL_CMD = [
+/* ============================================================
+   3. 取数命令
+   ============================================================ */
+var MOD = "/data/adb/modules/charge_keepalive_fix";
+
+var POLL_CMD = [
   'B=/sys/class/power_supply/battery;',
   'CD="";',
   'for c in /sys/class/thermal/cooling_device*; do',
@@ -157,22 +433,90 @@ var ALL_CMD = [
   'echo "$(cat $B/capacity 2>/dev/null)|$(cat $B/status 2>/dev/null)|',
   '$(cat $B/current_now 2>/dev/null)|$(cat $B/voltage_now 2>/dev/null)|',
   '$(cat $B/temp 2>/dev/null)|$(cat $B/charging_enable 2>/dev/null)|',
-  '$(cat $CD/cur_state 2>/dev/null)|$(cat $B/charge_control_limit 2>/dev/null)";',
+  '$(cat $CD/cur_state 2>/dev/null)|$(cat $B/charge_control_limit 2>/dev/null)|',
+  '$(cat /sys/class/power_supply/usb/type 2>/dev/null)";',
   'echo "@@SESS@@";',
-  'tail -5 /data/local/tmp/charge_sessions.csv 2>/dev/null;',
+  'tail -6 /data/local/tmp/charge_sessions.csv 2>/dev/null;',
   'echo "@@LOG@@";',
-  'tail -9 /data/local/tmp/charge_keepalive.log 2>/dev/null'
+  'tail -12 /data/local/tmp/charge_keepalive.log 2>/dev/null'
 ].join(" ");
 
-function fmt(n, div, digits) {
-  var x = parseInt(n, 10);
-  if (isNaN(x)) return "--";
-  return (x / div).toFixed(digits);
+var CFG_CMD = 'M=' + MOD + ';' +
+  'echo "@@W@@"; cat $M/webui.conf 2>/dev/null;' +
+  'echo "@@C@@"; grep -E "^(MAX_CURRENT|CHARGE_POLL)=" $M/config.prop 2>/dev/null;' +
+  'echo "@@V@@"; grep "^version=" $M/module.prop 2>/dev/null | cut -d= -f2';
+
+/* ============================================================
+   4. 状态
+   ============================================================ */
+var PRESETS = [
+  { hex: "#6750A4", name: "莫奈紫" },
+  { hex: "#0B57D0", name: "晴空蓝" },
+  { hex: "#00696E", name: "湖水青" },
+  { hex: "#2E6C3F", name: "苔原绿" },
+  { hex: "#8B5000", name: "琥珀橙" },
+  { hex: "#984061", name: "胭脂粉" },
+  { hex: "#7A5900", name: "沙丘褐" },
+  { hex: "#4A5C92", name: "雾霭蓝" }
+];
+
+var state = {
+  seed: "#6750A4",
+  mode: "auto",
+  view: "home",
+  maxCur: 6,
+  poll: 0.3
+};
+
+var $ = function (id) { return document.getElementById(id); };
+function setText(id, v) {
+  var el = $(id);
+  if (el) el.textContent = (v === null || v === undefined) ? "--" : String(v);
 }
 
-function paint(raw) {
+/* ============================================================
+   5. 主题
+   ============================================================ */
+function kebab(s) { return s.replace(/[A-Z]/g, function (m) { return "-" + m.toLowerCase(); }); }
+
+function isDark() {
+  if (state.mode === "dark") return true;
+  if (state.mode === "light") return false;
+  try { return window.matchMedia("(prefers-color-scheme: dark)").matches; } catch (e) { return true; }
+}
+
+function applyTheme() {
+  var sc = buildScheme(state.seed);
+  var dark = isDark();
+  var c = dark ? sc.dark : sc.light;
+  var root = document.documentElement;
+  root.setAttribute("data-mode", dark ? "dark" : "light");
+  for (var k in c) {
+    if (Object.prototype.hasOwnProperty.call(c, k)) {
+      root.style.setProperty("--" + kebab(k), c[k]);
+    }
+  }
+}
+
+function seedName() {
+  for (var i = 0; i < PRESETS.length; i++) {
+    if (PRESETS[i].hex.toLowerCase() === state.seed.toLowerCase()) return PRESETS[i].name;
+  }
+  return state.seed.toUpperCase();
+}
+
+/* ============================================================
+   6. 渲染
+   ============================================================ */
+function fmt(n, div, d) {
+  var x = parseInt(n, 10);
+  if (isNaN(x)) return "--";
+  return (x / div).toFixed(d);
+}
+
+function renderStatus(raw) {
   var f = raw.trim().split("|");
-  if (f.length < 8) { $("dot").className = "dot err"; setText("status", "读取失败"); return false; }
+  if (f.length < 8) { setText("sub", "读取失败"); return false; }
 
   var cap = parseInt(f[0], 10);
   var st  = f[1];
@@ -182,77 +526,222 @@ function paint(raw) {
   var ce  = f[5];
   var cd  = f[6];
   var fcc = parseInt(f[7], 10);
+  var usb = f[8] || "";
 
   setText("cap", isNaN(cap) ? "--" : cap);
 
   var charging = (ia < 0);
-  var label = st || "--";
-  if (ce === "0" && charging) label += " · ce=0";
-  setText("status", label);
-  $("status").className = "st" + (charging ? " charging" : "");
+  $("state").className = "chip" + (charging ? " on" : "");
+  setText("state-txt", charging ? "充电中" : (st || "未知"));
+
+  var note = "";
+  if (ce === "0" && charging) note = "ce=0 · 保活中";
+  else if (usb) note = usb;
+  setText("note", note);
+
+  setText("sub", charging ? "保活运行中" : "等待插入充电器");
 
   setText("cur", isNaN(ia) ? "--" : fmt(Math.abs(ia), 1e6, 2));
-  $("cur").innerHTML += isNaN(ia) ? "" : "<i>A</i>";
-
   var w = (!isNaN(ia) && !isNaN(ua)) ? Math.abs(ia) * ua / 1e12 : NaN;
   setText("pw", isNaN(w) ? "--" : w.toFixed(1));
-  $("pw").innerHTML += isNaN(w) ? "" : "<i>W</i>";
-
   setText("volt", isNaN(ua) ? "--" : fmt(ua, 1e6, 2));
-  $("volt").innerHTML += isNaN(ua) ? "" : "<i>V</i>";
-
   setText("temp", isNaN(t) ? "--" : (t / 10).toFixed(1));
-  $("temp").innerHTML += isNaN(t) ? "" : "<i>℃</i>";
-
   setText("cdev", cd || "--");
   setText("fcc", isNaN(fcc) ? "--" : fmt(fcc, 1e6, 2));
-  $("fcc").innerHTML += isNaN(fcc) ? "" : "<i>A</i>";
-
-  $("dot").className = "dot" + (charging ? " on" : "");
   return true;
 }
 
+function renderStatusError(err) {
+  $("state").className = "chip";
+  if (err === "no-bridge") {
+    setText("state-txt", "接口不可用");
+    setText("sub", "当前管理器没有提供 exec 接口");
+  } else if (err === "timeout") {
+    setText("state-txt", "读取超时");
+    setText("sub", "exec 8 秒无响应");
+  } else {
+    setText("state-txt", "读取失败");
+    setText("sub", String(err || "未知错误").slice(0, 80));
+  }
+}
+
+/* ============================================================
+   7. 轮询
+   ============================================================ */
 var busy = false;
 
 function tick() {
-  if (busy) return;
+  if (busy || state.view !== "home") return;
   busy = true;
-
-  sh(ALL_CMD, 8000).then(function (r) {
+  sh(POLL_CMD, 8000).then(function (r) {
     busy = false;
-
-    if (!r.ok && !r.out) {
-      $("dot").className = "dot err";
-      if (r.err === "no-bridge") {
-        setText("status", "管理器不支持 WebUI");
-        setText("foot", "找不到 ksu.exec / exec 接口");
-      } else if (r.err === "timeout") {
-        setText("status", "读取超时");
-        setText("foot", "exec 8 秒无回调，命令被阻塞");
-      } else {
-        setText("status", "读取失败");
-        setText("foot", (r.err || "未知错误").slice(0, 120));
-      }
-      return;
-    }
+    if (!r.ok && !r.out) { renderStatusError(r.err); return; }
 
     var seg = r.out.split("@@SESS@@");
     var rest = (seg[1] || "").split("@@LOG@@");
 
-    if (paint(seg[0])) {
+    if (renderStatus(seg[0])) {
       setText("sess", (rest[0] || "").trim() || "暂无记录");
       setText("log", (rest[1] || "").trim() || "暂无日志");
-      setText("foot", "每 2 秒刷新");
     }
-  }).catch(function (e) {
-    busy = false;
-    $("dot").className = "dot err";
-    setText("status", "脚本异常");
-    setText("foot", String(e).slice(0, 120));
   });
 }
 
+/* ============================================================
+   8. 设置
+   ============================================================ */
+function toast(msg) {
+  var el = $("toast");
+  el.textContent = msg;
+  el.classList.add("show");
+  clearTimeout(el._t);
+  el._t = setTimeout(function () { el.classList.remove("show"); }, 1900);
+}
+
+function buildSwatches() {
+  var box = $("swatches");
+  var html = "";
+  PRESETS.forEach(function (p) {
+    html += '<button class="sw" data-seed="' + p.hex + '" aria-label="' + p.name +
+            '" style="background:' + p.hex + '"></button>';
+  });
+  html += '<label class="sw custom" aria-label="自定义颜色">' +
+          '<input type="color" id="customSeed" value="' + state.seed + '"></label>';
+  box.innerHTML = html;
+
+  box.querySelectorAll("[data-seed]").forEach(function (b) {
+    b.addEventListener("click", function () { pickSeed(b.getAttribute("data-seed")); });
+  });
+  var custom = box.querySelector("#customSeed");
+  if (custom) custom.addEventListener("input", function () { pickSeed(this.value); });
+  syncSwatches();
+}
+
+function syncSwatches() {
+  document.querySelectorAll("[data-seed]").forEach(function (b) {
+    b.setAttribute("aria-pressed",
+      b.getAttribute("data-seed").toLowerCase() === state.seed.toLowerCase() ? "true" : "false");
+  });
+  setText("seedName", seedName());
+}
+
+function pickSeed(hex) {
+  state.seed = hex;
+  applyTheme();
+  syncSwatches();
+  saveAppearance();
+}
+
+function syncMode() {
+  document.querySelectorAll("#modeSeg button").forEach(function (b) {
+    b.setAttribute("aria-pressed", b.getAttribute("data-mode") === state.mode ? "true" : "false");
+  });
+}
+
+function saveAppearance() {
+  var cmd = "M=" + MOD +
+    "; printf 'seed=%s\\nmode=%s\\n' '" + state.seed + "' '" + state.mode + "' > $M/webui.conf";
+  sh(cmd, 5000);
+}
+
+function syncParams() {
+  $("maxCur").value = state.maxCur;
+  $("chargePoll").value = state.poll;
+  setText("curVal", state.maxCur.toFixed(1) + " A");
+  setText("pollVal", state.poll.toFixed(1) + " s");
+}
+
+function saveParam(key, value) {
+  var cmd = "M=" + MOD + "; sed -i 's/^" + key + "=.*/" + key + "=" + value + "/' $M/config.prop";
+  return sh(cmd, 5000).then(function (r) {
+    toast(r.ok ? "已保存，约 3 秒生效" : "写入失败");
+  });
+}
+
+function loadConfig() {
+  sh(CFG_CMD, 8000).then(function (r) {
+    if (!r.out) return;
+    var p = r.out.split("@@W@@")[1] || "";
+    var wpart = p.split("@@C@@")[0] || "";
+    var cpart = (p.split("@@C@@")[1] || "").split("@@V@@")[0] || "";
+    var vpart = p.split("@@V@@")[1] || "";
+
+    var m;
+    m = wpart.match(/seed=(#[0-9a-fA-F]{3,8})/);
+    if (m) state.seed = m[1];
+    m = wpart.match(/mode=(auto|light|dark)/);
+    if (m) state.mode = m[1];
+
+    m = cpart.match(/MAX_CURRENT=(\d+)/);
+    if (m) state.maxCur = Math.min(13, Math.max(1, parseInt(m[1], 10) / 1e6));
+    m = cpart.match(/CHARGE_POLL=([\d.]+)/);
+    if (m) state.poll = Math.min(1, Math.max(0.1, parseFloat(m[1])));
+
+    setText("ver", (vpart || "").trim() || "--");
+
+    applyTheme();
+    syncSwatches();
+    syncMode();
+    syncParams();
+  });
+}
+
+/* ============================================================
+   9. 事件与启动
+   ============================================================ */
+function openSettings() {
+  state.view = "settings";
+  document.body.classList.add("setting");
+  loadConfig();
+}
+function closeSettings() {
+  state.view = "home";
+  document.body.classList.remove("setting");
+  tick();
+}
+
+$("btn-settings").addEventListener("click", openSettings);
+$("btn-back").addEventListener("click", closeSettings);
+
+document.querySelectorAll("#modeSeg button").forEach(function (b) {
+  b.addEventListener("click", function () {
+    state.mode = b.getAttribute("data-mode");
+    applyTheme();
+    syncMode();
+    saveAppearance();
+  });
+});
+
+$("maxCur").addEventListener("input", function () {
+  setText("curVal", parseFloat(this.value).toFixed(1) + " A");
+});
+$("maxCur").addEventListener("change", function () {
+  var v = parseFloat(this.value);
+  state.maxCur = v;
+  saveParam("MAX_CURRENT", Math.round(v * 1e6));
+});
+
+$("chargePoll").addEventListener("input", function () {
+  setText("pollVal", parseFloat(this.value).toFixed(1) + " s");
+});
+$("chargePoll").addEventListener("change", function () {
+  var v = parseFloat(this.value);
+  state.poll = v;
+  saveParam("CHARGE_POLL", v.toFixed(1));
+});
+
+try {
+  window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", function () {
+    if (state.mode === "auto") applyTheme();
+  });
+} catch (e) {}
+
+applyTheme();
+buildSwatches();
+syncMode();
+syncParams();
 tick();
+loadConfig();
 setInterval(tick, 2000);
 </script>
 </body>
