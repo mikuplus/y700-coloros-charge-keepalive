@@ -557,7 +557,10 @@ function buildScheme(seedHex, dim) {
     light: {
       glowA: T(93), glowB: T(96),
       primary: Td(40), onPrimary: T(100),
-      primaryContainer: Td(90), onPrimaryContainer: T(10),
+      /* 暗调预设照标准 M3 用 tone 90 容器，浅色下会淡成一团灰粉，
+         完全看不出酒红。压到 tone 42 才是那个颜色，文字同步转浅。 */
+      primaryContainer: d > 0 ? T(42) : Td(90),
+      onPrimaryContainer: d > 0 ? T(97) : T(10),
       surface: N(98), surfaceDim: N(90),
       surfaceContainer: N(94), surfaceContainerHigh: N(90),
       onSurface: N(10), onSurfaceVariant: N(30),
@@ -749,7 +752,7 @@ function applyUiScale(c, sc) {
   root.style.setProperty("--blur", on ? "22px" : "0px");
   /* 浅色背景本身很淡，卡片要更实一点，否则和背景糊成一片 */
   root.style.setProperty("--card-bg", on ? hexToRgba(c.surfaceContainer, dk ? 0.52 : 0.76) : c.surfaceContainer);
-  root.style.setProperty("--hero-bg", on ? hexToRgba(c.primaryContainer, dk ? 0.7 : 0.86) : c.primaryContainer);
+  root.style.setProperty("--hero-bg", on ? hexToRgba(c.primaryContainer, dk ? 0.7 : 0.95) : c.primaryContainer);
   root.style.setProperty("--card-line", on ? hexToRgba(c.outlineVariant, 0.45) : "transparent");
   root.style.setProperty("--hero-line", on ? hexToRgba(c.onPrimaryContainer, 0.13) : "transparent");
   root.style.setProperty("--card-shine", on ? "rgba(255,255,255,0.055)" : "transparent");
