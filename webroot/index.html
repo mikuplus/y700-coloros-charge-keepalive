@@ -148,6 +148,20 @@
     background:var(--primary);border:2px solid var(--surface);
     margin-top:-7px;box-shadow:0 1px 4px rgba(0,0,0,.22);
   }
+  .switch{position:relative;width:52px;height:32px;flex:0 0 52px;display:block}
+  .switch input{position:absolute;inset:0;width:100%;height:100%;margin:0;opacity:0;z-index:2;cursor:pointer}
+  .switch .track{
+    position:absolute;inset:0;border-radius:999px;
+    background:var(--outline-variant);transition:background .22s;
+  }
+  .switch .track::after{
+    content:"";position:absolute;top:4px;left:4px;width:24px;height:24px;
+    border-radius:50%;background:var(--surface);
+    transition:transform .22s cubic-bezier(.2,0,0,1),background .22s;
+  }
+  .switch input:checked + .track{background:var(--primary)}
+  .switch input:checked + .track::after{transform:translateX(20px);background:var(--on-primary)}
+
   .hint{margin:0 0 14px;font-size:11.5px;color:var(--on-surface-variant);opacity:.85}
 
   /* ---------- toast ---------- */
@@ -191,7 +205,7 @@
     <div class="grid">
       <div class="card"><div class="k">功率</div><div class="v accent"><span id="pw">--</span><small>W</small></div></div>
       <div class="card"><div class="k">电流</div><div class="v"><span id="cur">--</span><small>A</small></div></div>
-      <div class="card"><div class="k">电压</div><div class="v"><span id="volt">--</span><small>V</small></div></div>
+      <div class="card"><div class="k" id="voltLabel">总电压</div><div class="v"><span id="volt">--</span><small>V</small></div></div>
       <div class="card"><div class="k">电池温度</div><div class="v"><span id="temp">--</span><small>℃</small></div></div>
       <div class="card"><div class="k">限流档</div><div class="v"><span id="cdev">--</span></div></div>
       <div class="card"><div class="k">限流上限</div><div class="v"><span id="fcc">--</span><small>A</small></div></div>
@@ -239,6 +253,13 @@
     </div>
 
     <h2 class="group">模块参数</h2>
+    <div class="panel">
+      <div class="row">
+        <span class="row-label">双芯串联电压</span>
+        <label class="switch"><input type="checkbox" id="dualCell" checked><span class="track"></span></label>
+      </div>
+      <p class="hint">内核上报的是单芯电压。Y700 四代是 2S 串联双电芯，开启后电压与功率按两倍计算。</p>
+    </div>
     <div class="panel">
       <div class="row">
         <span class="row-label">最大充电电流</span>
@@ -443,7 +464,7 @@ var POLL_CMD = [
 
 var CFG_CMD = 'M=' + MOD + ';' +
   'echo "@@W@@"; cat $M/webui.conf 2>/dev/null;' +
-  'echo "@@C@@"; grep -E "^(MAX_CURRENT|CHARGE_POLL)=" $M/config.prop 2>/dev/null;' +
+  'echo "@@C@@"; grep -E "^(MAX_CURRENT|CHARGE_POLL|CELLS)=" $M/config.prop 2>/dev/null;' +
   'echo "@@V@@"; grep "^version=" $M/module.prop 2>/dev/null | cut -d= -f2';
 
 /* ============================================================
@@ -465,7 +486,8 @@ var state = {
   mode: "auto",
   view: "home",
   maxCur: 6,
-  poll: 0.3
+  poll: 0.3,
+  cells: 2
 };
 
 var $ = function (id) { return document.getElementById(id); };
@@ -542,9 +564,10 @@ function renderStatus(raw) {
   setText("sub", charging ? "保活运行中" : "等待插入充电器");
 
   setText("cur", isNaN(ia) ? "--" : fmt(Math.abs(ia), 1e6, 2));
-  var w = (!isNaN(ia) && !isNaN(ua)) ? Math.abs(ia) * ua / 1e12 : NaN;
+  /* 内核报的是单芯电压，串联双芯整包要乘电芯数 */
+  var w = (!isNaN(ia) && !isNaN(ua)) ? Math.abs(ia) * ua * state.cells / 1e12 : NaN;
   setText("pw", isNaN(w) ? "--" : w.toFixed(1));
-  setText("volt", isNaN(ua) ? "--" : fmt(ua, 1e6, 2));
+  setText("volt", isNaN(ua) ? "--" : ((ua * state.cells) / 1e6).toFixed(2));
   setText("temp", isNaN(t) ? "--" : (t / 10).toFixed(1));
   setText("cdev", cd || "--");
   setText("fcc", isNaN(fcc) ? "--" : fmt(fcc, 1e6, 2));
@@ -585,6 +608,20 @@ function tick() {
       setText("log", (rest[1] || "").trim() || "暂无日志");
     }
   });
+}
+
+/* 在设置页里改了显示参数后，需要立刻按新参数重画一次主页。
+   若正好撞上 2 秒轮询在跑，就等它回来再补一次，最多等约 1 秒。 */
+function refreshNow(n) {
+  if (n === undefined) n = 8;
+  if (busy) {
+    if (n > 0) setTimeout(function () { refreshNow(n - 1); }, 120);
+    return;
+  }
+  var v = state.view;
+  state.view = "home";
+  tick();
+  state.view = v;
 }
 
 /* ============================================================
@@ -658,6 +695,22 @@ function saveParam(key, value) {
   });
 }
 
+function applyVoltLabel() {
+  setText("voltLabel", state.cells === 2 ? "总电压" : "电压");
+  var cb = $("dualCell");
+  if (cb) cb.checked = (state.cells === 2);
+}
+
+function saveCells(v) {
+  /* 老配置里可能还没有 CELLS 这一行，缺了就追加 */
+  var cmd = "M=" + MOD + "; f=$M/config.prop; " +
+    "if grep -q '^CELLS=' $f; then sed -i 's/^CELLS=.*/CELLS=" + v + "/' $f; " +
+    "else printf '\\nCELLS=" + v + "\\n' >> $f; fi";
+  return sh(cmd, 5000).then(function (r) {
+    toast(r.ok ? "已保存，约 3 秒生效" : "写入失败");
+  });
+}
+
 function loadConfig() {
   sh(CFG_CMD, 8000).then(function (r) {
     if (!r.out) return;
@@ -676,13 +729,17 @@ function loadConfig() {
     if (m) state.maxCur = Math.min(13, Math.max(1, parseInt(m[1], 10) / 1e6));
     m = cpart.match(/CHARGE_POLL=([\d.]+)/);
     if (m) state.poll = Math.min(1, Math.max(0.1, parseFloat(m[1])));
+    m = cpart.match(/CELLS=(\d+)/);
+    if (m) state.cells = parseInt(m[1], 10) === 1 ? 1 : 2;
 
     setText("ver", (vpart || "").trim() || "--");
 
     applyTheme();
+    applyVoltLabel();
     syncSwatches();
     syncMode();
     syncParams();
+    refreshNow();
   });
 }
 
@@ -712,6 +769,14 @@ document.querySelectorAll("#modeSeg button").forEach(function (b) {
   });
 });
 
+$("dualCell").addEventListener("change", function () {
+  state.cells = this.checked ? 2 : 1;
+  applyVoltLabel();
+  saveCells(state.cells);
+  toast(state.cells === 2 ? "已按双芯整包计算" : "已按单芯计算");
+  refreshNow();
+});
+
 $("maxCur").addEventListener("input", function () {
   setText("curVal", parseFloat(this.value).toFixed(1) + " A");
 });
@@ -738,6 +803,7 @@ try {
 
 applyTheme();
 buildSwatches();
+applyVoltLabel();
 syncMode();
 syncParams();
 tick();

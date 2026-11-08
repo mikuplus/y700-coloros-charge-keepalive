@@ -34,6 +34,7 @@ CHARGE_POLL=0.3         # 充电时多少秒轮询一次
 IDLE_POLL=5             # 没在充电时多少秒自查一次
 IDLE_NEED=20            # 连续多少次（按 CHARGE_POLL 计）检测到放电才停止轮询
 ENABLE_CALIBRATE=1      # 首次插电时自动标定 cooling 档位 → 限流映射
+CELLS=2                 # 电芯数：2=串联双芯（Y700 四代），只影响功率统计
 
 # ---- 电量分档限流（保护电池，和温度档取更保守的那个）----
 # 锂电池 80% 以上内阻上升、嵌锂变慢，大电流会加剧锂析出（容量永久衰减）。
@@ -130,6 +131,8 @@ sess_sample() {
   [ "$ib" -ge 0 ] && return 0
   vb=$(cat "$BAT/voltage_now" 2>/dev/null); vb=${vb:-0}
   ib=${ib#-}
+  # 内核报的是单芯电压；串联双芯整包电压 = 单芯 × CELLS
+  vb=$(( vb * CELLS ))
   # uA × uV → W
   w=$(( ib * vb / 1000000000000 ))
   SESS_WSUM=$(( SESS_WSUM + w ))
@@ -234,6 +237,9 @@ loadconf() {
   V=$(readconf IDLE_POLL);       [ -n "$V" ] && IDLE_POLL=$(numonly "$V")
   V=$(readconf IDLE_NEED);       [ -n "$V" ] && IDLE_NEED=$(numonly "$V")
   V=$(readconf ENABLE_CALIBRATE);[ -n "$V" ] && ENABLE_CALIBRATE=$(numonly "$V")
+  # 电芯数只认 1 / 2，其余一律按单芯
+  V=$(readconf CELLS);           [ -n "$V" ] && CELLS=$(numonly "$V")
+  [ "$CELLS" != "2" ] && CELLS=1
 
   # 充电轮询间隔：支持小数（0.2 / 0.3 / 1），但必须 > 0，否则回退默认
   V=$(readconf CHARGE_POLL)
@@ -295,7 +301,7 @@ if [ -f "$CAL_FILE" ]; then
   fi
 fi
 
-log "===== worker 启动 ce=$ENABLE_CE thermal=$ENABLE_THERMAL 目标=${MAX_CURRENT}mA 档位=$CUR_A/$CUR_B/$CUR_C/$CUR_D | 电量保护=$ENABLE_SOC_GUARD 档位=$CUR_S80/$CUR_S90/$CUR_S95 | 充电轮询=${CHARGE_POLL}s 停顿自查=${IDLE_POLL}s | 标定=$([ "$CAL_LOADED" = 1 ] && echo 已加载 || echo 待首次插电) ====="
+log "===== worker 启动 ce=$ENABLE_CE thermal=$ENABLE_THERMAL 目标=${MAX_CURRENT}mA 档位=$CUR_A/$CUR_B/$CUR_C/$CUR_D | 电量保护=$ENABLE_SOC_GUARD 档位=$CUR_S80/$CUR_S90/$CUR_S95 | 充电轮询=${CHARGE_POLL}s 停顿自查=${IDLE_POLL}s 电芯=${CELLS}S | 标定=$([ "$CAL_LOADED" = 1 ] && echo 已加载 || echo 待首次插电) ====="
 
 LAST=""
 LASTMODE=""
