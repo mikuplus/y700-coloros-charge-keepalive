@@ -742,6 +742,7 @@ function applyTheme() {
     }
   }
   applyUiScale(c, sc);
+  paintSwatchColors();
 }
 
 /* 字号 / 全局缩放 / 毛玻璃，三者都靠 CSS 变量驱动 */
@@ -770,6 +771,33 @@ function seedName() {
     if (PRESETS[i].hex.toLowerCase() === state.seed.toLowerCase()) return PRESETS[i].name;
   }
   return state.seed.toUpperCase();
+}
+
+function findPreset(hex) {
+  for (var i = 0; i < PRESETS.length; i++) {
+    if (PRESETS[i].hex.toLowerCase() === String(hex).toLowerCase()) return PRESETS[i];
+  }
+  return null;
+}
+
+/* 色板圆点要显示「实际会看到的强调色」，不是原始种子。
+   种子是输入源，M3 生成后色相相同但明度/饱和度都变了，不这么画
+   就成了"点一个颜色、界面是另一个颜色"。 */
+function swatchColor(p) {
+  var pal = rgb2oklch(hex2rgb(p.hex));
+  var d = p.dim || 0;
+  var sat = d > 0 ? 1.6 : 1;
+  return isDark() ? toneOf(pal, Math.max(0, 80 - d), sat)
+                  : toneOf(pal, Math.max(0, 40 - d), sat);
+}
+
+function paintSwatchColors() {
+  var list = document.querySelectorAll("[data-seed]");
+  if (!list.length) return;
+  Array.prototype.forEach.call(list, function (b) {
+    var p = findPreset(b.getAttribute("data-seed"));
+    if (p) b.style.background = swatchColor(p);
+  });
 }
 
 /* 预设可以带 dim 偏移，让整体色调比标准 M3 更沉（勃艮第酒红用 8） */
@@ -950,8 +978,7 @@ function buildSwatches() {
   var box = $("swatches");
   var html = "";
   PRESETS.forEach(function (p) {
-    html += '<button class="sw" data-seed="' + p.hex + '" aria-label="' + p.name +
-            '" style="background:' + p.hex + '"></button>';
+    html += '<button class="sw" data-seed="' + p.hex + '" aria-label="' + p.name + '"></button>';
   });
   html += '<button class="sw custom" id="btnCustom" aria-label="自定义颜色"></button>';
   box.innerHTML = html;
@@ -960,6 +987,7 @@ function buildSwatches() {
     b.addEventListener("click", function () { pickSeed(b.getAttribute("data-seed")); });
   });
   $("btnCustom").addEventListener("click", togglePicker);
+  paintSwatchColors();
   syncSwatches();
 }
 
