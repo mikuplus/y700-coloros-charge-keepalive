@@ -366,23 +366,27 @@ function toneOf(pal, t, scale) {
   var L = (t + 16) / 116;
   return toHex(oklch2rgb(L, pal.C * chromaK(t) * (scale === undefined ? 1 : scale), pal.H));
 }
-function buildScheme(seedHex) {
+function buildScheme(seedHex, dim) {
   var pal = rgb2oklch(hex2rgb(seedHex));
-  var T = function (t) { return toneOf(pal, t); };
+  /* dim>0 让主色系列整体压暗。M3 的 tone 是固定的（浅色 40 / 深色 80），
+     不压的话种子再深，出来的主色也会被拉回中等亮度。 */
+  var d = dim || 0;
+  var T  = function (t) { return toneOf(pal, t); };
+  var Td = function (t) { return toneOf(pal, Math.max(0, Math.min(100, t - d))); };
   /* 表面与文字走中性色盘，饱和度压到 15%，否则灰会透出紫/蓝 */
-  var N = function (t) { return toneOf(pal, t, 0.15); };
+  var N  = function (t) { return toneOf(pal, t, 0.15); };
   return {
     light: {
-      primary: T(40), onPrimary: T(100),
-      primaryContainer: T(90), onPrimaryContainer: T(10),
+      primary: Td(40), onPrimary: T(100),
+      primaryContainer: Td(90), onPrimaryContainer: T(10),
       surface: N(98), surfaceDim: N(90),
       surfaceContainer: N(94), surfaceContainerHigh: N(90),
       onSurface: N(10), onSurfaceVariant: N(30),
       outlineVariant: N(80)
     },
     dark: {
-      primary: T(80), onPrimary: T(20),
-      primaryContainer: T(30), onPrimaryContainer: T(90),
+      primary: Td(80), onPrimary: T(20),
+      primaryContainer: Td(30), onPrimaryContainer: T(90),
       surface: N(7), surfaceDim: N(22),
       surfaceContainer: N(12), surfaceContainerHigh: N(17),
       onSurface: N(90), onSurfaceVariant: N(80),
@@ -492,7 +496,7 @@ var PRESETS = [
   { hex: "#00696E", name: "湖水青" },
   { hex: "#2E6C3F", name: "苔原绿" },
   { hex: "#8B5000", name: "琥珀橙" },
-  { hex: "#800020", name: "勃艮第红" },
+  { hex: "#5B1A2C", name: "勃艮第酒红", dim: 8 },
   { hex: "#984061", name: "胭脂粉" },
   { hex: "#7A5900", name: "沙丘褐" },
   { hex: "#4A5C92", name: "雾霭蓝" }
@@ -525,7 +529,7 @@ function isDark() {
 }
 
 function applyTheme() {
-  var sc = buildScheme(state.seed);
+  var sc = buildScheme(state.seed, seedDim());
   var dark = isDark();
   var c = dark ? sc.dark : sc.light;
   var root = document.documentElement;
@@ -542,6 +546,14 @@ function seedName() {
     if (PRESETS[i].hex.toLowerCase() === state.seed.toLowerCase()) return PRESETS[i].name;
   }
   return state.seed.toUpperCase();
+}
+
+/* 预设可以带 dim 偏移，让整体色调比标准 M3 更沉（勃艮第酒红用 8） */
+function seedDim() {
+  for (var i = 0; i < PRESETS.length; i++) {
+    if (PRESETS[i].hex.toLowerCase() === state.seed.toLowerCase()) return PRESETS[i].dim || 0;
+  }
+  return 0;
 }
 
 /* 接受 #RGB / #RRGGBB / #AARRGGBB（Android 习惯，取后 6 位），无效返回 null */
