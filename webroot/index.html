@@ -221,7 +221,10 @@
     cursor:pointer;transition:background .2s,color .2s;
   }
   .segmented button[aria-pressed="true"]{
-    background:var(--primary);color:var(--on-primary);font-weight:500;
+    /* M3 的 segmented 选中态用 container 色，不是 primary。
+       primary 在深色模式必须够亮，红系一提亮就发粉；container 才是深酒红。 */
+    background:var(--primary-container);color:var(--on-primary-container);
+    font-weight:500;
   }
 
   input[type=range]{
