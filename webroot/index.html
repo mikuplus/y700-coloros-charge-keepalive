@@ -549,17 +549,20 @@ function buildScheme(seedHex, dim) {
   /* dim>0 让主色系列整体压暗。M3 的 tone 是固定的（浅色 40 / 深色 80），
      不压的话种子再深，出来的主色也会被拉回中等亮度。 */
   var d = dim || 0;
-  var T  = function (t) { return toneOf(pal, t); };
-  var Td = function (t) { return toneOf(pal, Math.max(0, Math.min(100, t - d))); };
+  /* 暗调预设要额外把饱和度提上来：降 tone 时 chroma 会跟着掉，
+     不补的话深红会变成褐。标准勃艮第 #800020 的 chroma 是 0.152。 */
+  var sat = d > 0 ? 1.6 : 1;
+  var T  = function (t) { return toneOf(pal, t, sat); };
+  var Td = function (t) { return toneOf(pal, Math.max(0, Math.min(100, t - d)), sat); };
   /* 表面与文字走中性色盘，饱和度压到 15%，否则灰会透出紫/蓝 */
   var N  = function (t) { return toneOf(pal, t, 0.15); };
   return {
     light: {
       glowA: T(93), glowB: T(96),
       primary: Td(40), onPrimary: T(100),
-      /* 暗调预设照标准 M3 用 tone 90 容器，浅色下会淡成一团灰粉，
-         完全看不出酒红。压到 tone 42 才是那个颜色，文字同步转浅。 */
-      primaryContainer: d > 0 ? T(42) : Td(90),
+      /* 暗调预设不能用标准 M3 的 tone 90 容器（浅色下淡成灰粉），
+         压到 tone 30 并拉满饱和才是勃艮第红，文字同步转浅。 */
+      primaryContainer: d > 0 ? toneOf(pal, 30, 1.7) : Td(90),
       onPrimaryContainer: d > 0 ? T(97) : T(10),
       surface: N(98), surfaceDim: N(90),
       surfaceContainer: N(94), surfaceContainerHigh: N(90),
