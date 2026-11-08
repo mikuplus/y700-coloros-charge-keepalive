@@ -21,10 +21,8 @@
   body::before{
     content:"";position:fixed;inset:0;pointer-events:none;z-index:0;
     background:
-      radial-gradient(34% 26% at 10% 4%,  var(--glow-a) 0%, var(--glow-a) 34%, transparent 62%),
-      radial-gradient(38% 28% at 94% 22%, var(--glow-b) 0%, var(--glow-b) 30%, transparent 60%),
-      radial-gradient(42% 30% at 16% 92%, var(--glow-b) 0%, var(--glow-b) 28%, transparent 60%),
-      radial-gradient(34% 26% at 88% 96%, var(--glow-a) 0%, var(--glow-a) 32%, transparent 62%);
+      radial-gradient(150% 105% at 0% -12%,  var(--glow-a) 0%, transparent 58%),
+      radial-gradient(135% 115% at 108% 112%, var(--glow-b) 0%, transparent 60%);
     opacity:var(--glow-op);
     transition:opacity .3s;
   }
@@ -119,12 +117,19 @@
 
   /* ---------- 设置页 ---------- */
   .group{
-    margin:22px 0 10px 4px;font-size:calc(12.5px * var(--txt));font-weight:600;
-    color:var(--primary);letter-spacing:.4px;
+    display:flex;align-items:center;gap:9px;
+    margin:24px 0 10px;font-size:calc(13px * var(--txt));font-weight:600;
+    color:var(--on-surface);letter-spacing:.2px;
   }
+  .gicon{
+    width:calc(27px*var(--sp));height:calc(27px*var(--sp));flex:0 0 auto;
+    border-radius:50%;display:grid;place-items:center;
+    background:var(--primary-container);color:var(--on-primary-container);
+  }
+  .gicon svg{width:14px;height:14px;display:block}
   .panel{
     background:var(--surface-container);border-radius:22px;
-    padding:calc(6px*var(--sp)) calc(18px*var(--sp));margin-bottom:10px;transition:background .3s;
+    padding:calc(6px*var(--sp)) calc(18px*var(--sp));margin-bottom:12px;transition:background .3s;
   }
   .row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:calc(14px*var(--sp)) 0}
   .row + .row{border-top:1px solid var(--outline-variant)}
@@ -317,7 +322,7 @@
       <div class="grow"></div>
     </header>
 
-    <h2 class="group">外观</h2>
+    <h2 class="group"><span class="gicon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="8.4"/><circle cx="9.2" cy="9.4" r="1.15" fill="currentColor" stroke="none"/><circle cx="14.8" cy="9.4" r="1.15" fill="currentColor" stroke="none"/><circle cx="9.6" cy="14.6" r="1.15" fill="currentColor" stroke="none"/><circle cx="14.4" cy="15" r="1.15" fill="currentColor" stroke="none"/></svg></span>外观</h2>
     <div class="panel">
       <div class="row">
         <span class="row-label">主题色</span>
@@ -355,7 +360,7 @@
       </div>
     </div>
 
-    <h2 class="group">显示</h2>
+    <h2 class="group"><span class="gicon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.5" width="18" height="12" rx="2.4"/><path d="M8.5 20.5h7"/><path d="M12 16.5v4"/></svg></span>显示</h2>
     <div class="panel">
       <div class="row">
         <span class="row-label">字体大小</span>
@@ -381,7 +386,7 @@
       <p class="hint">毛玻璃质感，卡片会透出背景光晕。设备掉帧明显时可以关掉。</p>
     </div>
 
-    <h2 class="group">模块参数</h2>
+    <h2 class="group"><span class="gicon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2.5 4.8 13.6h5.9L10 21.5l8.2-11.1h-5.9L13 2.5z"/></svg></span>模块参数</h2>
     <div class="panel">
       <div class="row">
         <span class="row-label">双芯串联电压</span>
@@ -407,7 +412,7 @@
       <p class="hint">调大更省电，但 charging_enable 被打回后恢复更慢。改完约 3 秒生效。</p>
     </div>
 
-    <h2 class="group">关于</h2>
+    <h2 class="group"><span class="gicon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="8.4"/><path d="M12 11.2v5.3"/><circle cx="12" cy="7.9" r="1.05" fill="currentColor" stroke="none"/></svg></span>关于</h2>
     <div class="panel">
       <div class="row"><span class="row-label">模块版本</span><span class="row-value" id="ver">--</span></div>
       <div class="row"><span class="row-label">配置</span><span class="row-value mono">config.prop</span></div>
@@ -521,8 +526,8 @@ function buildScheme(seedHex, dim) {
   /* 表面与文字走中性色盘，饱和度压到 15%，否则灰会透出紫/蓝 */
   var N  = function (t) { return toneOf(pal, t, 0.15); };
   return {
-    glow1: T(55), glow2: T(72),
     light: {
+      glowA: T(93), glowB: T(96),
       primary: Td(40), onPrimary: T(100),
       primaryContainer: Td(90), onPrimaryContainer: T(10),
       surface: N(98), surfaceDim: N(90),
@@ -531,6 +536,7 @@ function buildScheme(seedHex, dim) {
       outlineVariant: N(80)
     },
     dark: {
+      glowA: T(24), glowB: T(31),
       primary: Td(80), onPrimary: T(20),
       primaryContainer: Td(30), onPrimaryContainer: T(90),
       surface: N(7), surfaceDim: N(22),
@@ -698,15 +704,17 @@ function applyUiScale(c, sc) {
   root.style.setProperty("--sp", state.sp);
 
   var on = state.blur === 1;
+  var dk = isDark();
   root.style.setProperty("--blur", on ? "22px" : "0px");
-  root.style.setProperty("--card-bg", on ? hexToRgba(c.surfaceContainer, 0.52) : c.surfaceContainer);
-  root.style.setProperty("--hero-bg", on ? hexToRgba(c.primaryContainer, 0.7) : c.primaryContainer);
+  /* 浅色背景本身很淡，卡片要更实一点，否则和背景糊成一片 */
+  root.style.setProperty("--card-bg", on ? hexToRgba(c.surfaceContainer, dk ? 0.52 : 0.76) : c.surfaceContainer);
+  root.style.setProperty("--hero-bg", on ? hexToRgba(c.primaryContainer, dk ? 0.7 : 0.86) : c.primaryContainer);
   root.style.setProperty("--card-line", on ? hexToRgba(c.outlineVariant, 0.45) : "transparent");
   root.style.setProperty("--hero-line", on ? hexToRgba(c.onPrimaryContainer, 0.13) : "transparent");
   root.style.setProperty("--card-shine", on ? "rgba(255,255,255,0.055)" : "transparent");
 
-  root.style.setProperty("--glow-a", hexToRgba(sc.glow1, on ? 0.4 : 0));
-  root.style.setProperty("--glow-b", hexToRgba(sc.glow2, on ? 0.34 : 0));
+  root.style.setProperty("--glow-a", on ? c.glowA : "transparent");
+  root.style.setProperty("--glow-b", on ? c.glowB : "transparent");
   root.style.setProperty("--glow-op", on ? "1" : "0");
 }
 
