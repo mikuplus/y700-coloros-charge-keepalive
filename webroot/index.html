@@ -99,6 +99,15 @@
   .card .v{font-size:calc(19px * var(--txt));font-weight:500;font-variant-numeric:tabular-nums;letter-spacing:-.3px}
   .card .v small{font-size:calc(11px * var(--txt));font-weight:400;color:var(--on-surface-variant);margin-left:2px}
   .card .v.accent{color:var(--primary)}
+  @keyframes cardIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+  .card,.hero{animation:cardIn .36s cubic-bezier(.2,.9,.3,1) backwards}
+  .card:nth-child(2){animation-delay:.03s}
+  .card:nth-child(3){animation-delay:.06s}
+  .card:nth-child(4){animation-delay:.09s}
+  .card:nth-child(5){animation-delay:.12s}
+  .card:nth-child(6){animation-delay:.15s}
+  .card{transition:transform .18s cubic-bezier(.34,1.4,.64,1),background .3s,border-color .3s}
+  .card:active{transform:scale(.975)}
 
   /* ---------- 区块 ---------- */
   .block{margin-bottom:18px}
@@ -241,6 +250,19 @@
   .switch input:checked + .track{background:var(--primary)}
   .switch input:checked + .track::after{transform:translateX(20px);background:var(--on-primary)}
 
+  .chips{display:flex;flex-wrap:wrap;gap:8px;padding:12px 0 6px}
+  .tchip{
+    border:1px solid var(--outline-variant);background:transparent;
+    color:var(--on-surface-variant);border-radius:999px;
+    padding:7px 14px;font-family:inherit;font-size:calc(12.5px*var(--txt));
+    cursor:pointer;transition:background .18s,color .18s,border-color .18s,transform .12s;
+  }
+  .tchip:active{transform:scale(.94)}
+  .tchip[aria-pressed="true"]{
+    background:var(--primary-container);color:var(--on-primary-container);
+    border-color:transparent;font-weight:500;
+  }
+
   .hint{margin:0 0 14px;font-size:calc(11.5px * var(--txt));color:var(--on-surface-variant);opacity:.85}
 
   /* ---------- toast ---------- */
@@ -291,20 +313,20 @@
     </div>
 
     <div class="grid">
-      <div class="card"><div class="k">功率</div><div class="v accent"><span id="pw">--</span><small>W</small></div></div>
-      <div class="card"><div class="k">电流</div><div class="v"><span id="cur">--</span><small>A</small></div></div>
-      <div class="card"><div class="k" id="voltLabel">总电压</div><div class="v"><span id="volt">--</span><small>V</small></div></div>
-      <div class="card"><div class="k">电池温度</div><div class="v"><span id="temp">--</span><small>℃</small></div></div>
-      <div class="card"><div class="k">限流档</div><div class="v"><span id="cdev">--</span></div></div>
-      <div class="card"><div class="k">限流上限</div><div class="v"><span id="fcc">--</span><small>A</small></div></div>
+      <div class="card" id="card-pw"><div class="k">功率</div><div class="v accent"><span id="pw">--</span><small>W</small></div></div>
+      <div class="card" id="card-cur"><div class="k">电流</div><div class="v"><span id="cur">--</span><small>A</small></div></div>
+      <div class="card" id="card-volt"><div class="k" id="voltLabel">总电压</div><div class="v"><span id="volt">--</span><small>V</small></div></div>
+      <div class="card" id="card-temp"><div class="k">电池温度</div><div class="v"><span id="temp">--</span><small>℃</small></div></div>
+      <div class="card" id="card-cdev"><div class="k">限流档</div><div class="v"><span id="cdev">--</span></div></div>
+      <div class="card" id="card-fcc"><div class="k">限流上限</div><div class="v"><span id="fcc">--</span><small>A</small></div></div>
     </div>
 
-    <section class="block">
+    <section class="block" id="blk-sess">
       <h2>最近会话</h2>
       <pre id="sess">--</pre>
     </section>
 
-    <section class="block">
+    <section class="block" id="blk-log">
       <h2>日志</h2>
       <pre id="log">--</pre>
     </section>
@@ -384,6 +406,12 @@
         <label class="switch"><input type="checkbox" id="blurTgl" checked><span class="track"></span></label>
       </div>
       <p class="hint">毛玻璃质感，卡片会透出背景光晕。设备掉帧明显时可以关掉。</p>
+    </div>
+
+    <h2 class="group"><span class="gicon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3.5" y="3.5" width="7" height="7" rx="2"/><rect x="13.5" y="3.5" width="7" height="7" rx="2"/><rect x="3.5" y="13.5" width="7" height="7" rx="2"/><rect x="13.5" y="13.5" width="7" height="7" rx="2"/></svg></span>主页卡片</h2>
+    <div class="panel">
+      <div class="chips" id="cardChips"></div>
+      <p class="hint">点一下切换显示。想看的数据留着，用不上的关掉，主页更清爽。</p>
     </div>
 
     <h2 class="group"><span class="gicon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2.5 4.8 13.6h5.9L10 21.5l8.2-11.1h-5.9L13 2.5z"/></svg></span>模块参数</h2>
@@ -654,6 +682,17 @@ var PRESETS = [
   { hex: "#4A5C92", name: "雾霭蓝" }
 ];
 
+var CARDS = [
+  { k: "pw",   n: "功率" },
+  { k: "cur",  n: "电流" },
+  { k: "volt", n: "电压" },
+  { k: "temp", n: "温度" },
+  { k: "cdev", n: "限流档" },
+  { k: "fcc",  n: "限流上限" },
+  { k: "sess", n: "最近会话" },
+  { k: "log",  n: "日志" }
+];
+
 var state = {
   seed: "#6750A4",
   mode: "auto",
@@ -663,8 +702,10 @@ var state = {
   cells: 2,
   txt: 1,
   sp: 1,
-  blur: 1
+  blur: 1,
+  cards: {}
 };
+CARDS.forEach(function (c) { state.cards[c.k] = 1; });
 
 var $ = function (id) { return document.getElementById(id); };
 function setText(id, v) {
@@ -949,11 +990,46 @@ function syncMode() {
 
 function saveAppearance() {
   var cmd = "M=" + MOD +
-    "; printf 'seed=%s\\nmode=%s\\ntxt=%s\\nsp=%s\\nblur=%s\\n' '" +
+    "; printf 'seed=%s\\nmode=%s\\ntxt=%s\\nsp=%s\\nblur=%s\\ncards=%s\\n' '" +
     state.seed + "' '" + state.mode + "' '" +
-    state.txt + "' '" + state.sp + "' '" + state.blur +
+    state.txt + "' '" + state.sp + "' '" + state.blur + "' '" + cardsStr() +
     "' > $M/webui.conf";
   sh(cmd, 5000);
+}
+
+function cardsStr() {
+  return CARDS.filter(function (c) { return state.cards[c.k]; })
+              .map(function (c) { return c.k; }).join(",");
+}
+
+function syncCardChips() {
+  document.querySelectorAll("[data-card]").forEach(function (b) {
+    b.setAttribute("aria-pressed", state.cards[b.getAttribute("data-card")] ? "true" : "false");
+  });
+}
+
+function applyCards() {
+  CARDS.forEach(function (c) {
+    var el = $("card-" + c.k) || $("blk-" + c.k);
+    if (el) el.style.display = state.cards[c.k] ? "" : "none";
+  });
+  syncCardChips();
+}
+
+function buildCardChips() {
+  var box = $("cardChips");
+  box.innerHTML = CARDS.map(function (c) {
+    return '<button class="tchip" data-card="' + c.k + '">' + c.n + '</button>';
+  }).join("");
+  box.querySelectorAll("[data-card]").forEach(function (b) {
+    b.addEventListener("click", function () {
+      var k = b.getAttribute("data-card");
+      state.cards[k] = state.cards[k] ? 0 : 1;
+      applyCards();
+      saveAppearance();
+    });
+  });
+  syncCardChips();
 }
 
 function syncDisplay() {
@@ -1019,6 +1095,12 @@ function loadConfig() {
     if (m) state.sp = Math.min(1.2, Math.max(0.85, parseFloat(m[1])));
     m = wpart.match(/blur=(\d+)/);
     if (m) state.blur = parseInt(m[1], 10) ? 1 : 0;
+    m = wpart.match(/cards=([a-z,]*)/);
+    if (m) {
+      var vis = {};
+      m[1].split(",").forEach(function (k) { if (k) vis[k] = 1; });
+      CARDS.forEach(function (c) { state.cards[c.k] = vis[c.k] ? 1 : 0; });
+    }
 
     m = cpart.match(/CELLS=(\d+)/);
     if (m) state.cells = parseInt(m[1], 10) === 1 ? 1 : 2;
@@ -1031,6 +1113,7 @@ function loadConfig() {
     syncMode();
     syncParams();
     syncDisplay();
+    applyCards();
     refreshNow();
   });
 }
@@ -1158,6 +1241,8 @@ applyVoltLabel();
 syncMode();
 syncParams();
 syncDisplay();
+buildCardChips();
+applyCards();
 tick();
 loadConfig();
 setInterval(tick, 2000);
