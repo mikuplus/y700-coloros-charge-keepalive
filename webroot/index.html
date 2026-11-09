@@ -466,10 +466,19 @@
 
     <div class="panel">
       <div class="row">
-        <span class="row-label">卡片模糊</span>
-        <label class="switch"><input type="checkbox" id="blurTgl" checked><span class="track"></span></label>
+        <span class="row-label">卡片透明度</span>
+        <span class="row-value" id="alphaVal">50%</span>
       </div>
-      <p class="hint">毛玻璃质感，卡片会透出背景光晕。设备掉帧明显时可以关掉。</p>
+      <div class="barwrap"><input type="range" id="alphaRange" min="0" max="6" step="1" value="3" class="bar"></div>
+    </div>
+
+    <div class="panel">
+      <div class="row">
+        <span class="row-label">卡片模糊度</span>
+        <span class="row-value" id="blurVal">25px</span>
+      </div>
+      <div class="barwrap"><input type="range" id="blurLvRange" min="0" max="6" step="1" value="3" class="bar"></div>
+      <p class="hint">模糊 0 时退化成实心卡片，设备掉帧可以拉到最低。</p>
     </div>
 
     <h2 class="group"><span class="gicon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3.5" y="3.5" width="7" height="7" rx="2"/><rect x="13.5" y="3.5" width="7" height="7" rx="2"/><rect x="3.5" y="13.5" width="7" height="7" rx="2"/><rect x="13.5" y="13.5" width="7" height="7" rx="2"/></svg></span>主页卡片</h2>
@@ -775,7 +784,8 @@ var state = {
   cells: 2,
   txt: 1,
   sp: 1,
-  blur: 1,
+  alphaLv: 3,
+  blurLv: 3,
   cards: {}
 };
 CARDS.forEach(function (c) { state.cards[c.k] = 1; });
@@ -818,23 +828,26 @@ function applyUiScale(c, sc) {
   root.style.setProperty("--txt", state.txt);
   root.style.setProperty("--sp", state.sp);
 
-  var on = state.blur === 1;
   var dk = isDark();
-  root.style.setProperty("--blur", on ? "22px" : "0px");
+  /* 7 档：透明度 0~100%，模糊 0~50px */
+  var alpha = 1 - state.alphaLv / 6;
+  var blur = Math.round(state.blurLv / 6 * 50);
+  var shine = state.blurLv > 0;
+  root.style.setProperty("--blur", blur + "px");
   root.style.setProperty("--bar-empty", dk ? "rgba(255,255,255,0.11)" : "rgba(0,0,0,0.10)");
   /* 刻度点：填充区用深点、轨道用浅点，两种模式各自调 */
   root.style.setProperty("--dot-fill",  dk ? "rgba(0,0,0,0.40)" : "rgba(0,0,0,0.32)");
   root.style.setProperty("--dot-track", dk ? "rgba(255,255,255,0.28)" : "rgba(0,0,0,0.17)");
   /* 浅色背景本身很淡，卡片要更实一点，否则和背景糊成一片 */
-  root.style.setProperty("--card-bg", on ? hexToRgba(c.surfaceContainer, dk ? 0.52 : 0.76) : c.surfaceContainer);
-  root.style.setProperty("--hero-bg", on ? hexToRgba(c.primaryContainer, dk ? 0.7 : 0.95) : c.primaryContainer);
+  root.style.setProperty("--card-bg", hexToRgba(c.surfaceContainer, dk ? alpha : Math.min(1, alpha + 0.24)));
+  root.style.setProperty("--hero-bg", hexToRgba(c.primaryContainer, dk ? Math.min(1, alpha + 0.18) : Math.min(1, alpha + 0.4)));
   root.style.setProperty("--card-line", hexToRgba(c.primary, 0.22));
   root.style.setProperty("--hero-line", hexToRgba(c.onPrimaryContainer, 0.16));
-  root.style.setProperty("--card-shine", on ? "rgba(255,255,255,0.055)" : "transparent");
+  root.style.setProperty("--card-shine", shine ? "rgba(255,255,255,0.055)" : "transparent");
 
-  root.style.setProperty("--glow-a", on ? c.glowA : "transparent");
-  root.style.setProperty("--glow-b", on ? c.glowB : "transparent");
-  root.style.setProperty("--glow-op", on ? "1" : "0");
+  root.style.setProperty("--glow-a", c.glowA);
+  root.style.setProperty("--glow-b", c.glowB);
+  root.style.setProperty("--glow-op", "1");
 }
 
 function seedName() {
@@ -1095,9 +1108,9 @@ function syncMode() {
 
 function saveAppearance() {
   var cmd = "M=" + MOD +
-    "; printf 'seed=%s\\nmode=%s\\ntxt=%s\\nsp=%s\\nblur=%s\\ncards=%s\\n' '" +
+    "; printf 'seed=%s\\nmode=%s\\ntxt=%s\\nsp=%s\\nalpha=%s\\nblurlv=%s\\ncards=%s\\n' '" +
     state.seed + "' '" + state.mode + "' '" +
-    state.txt + "' '" + state.sp + "' '" + state.blur + "' '" + cardsStr() +
+    state.txt + "' '" + state.sp + "' '" + state.alphaLv + "' '" + state.blurLv + "' '" + cardsStr() +
     "' > $M/webui.conf";
   sh(cmd, 5000);
 }
@@ -1184,9 +1197,14 @@ function syncDisplay() {
   $("spRange").value = g;
   setText("txtVal", t + "%");
   setText("spVal", g + "%");
-  $("blurTgl").checked = state.blur === 1;
+  $("alphaRange").value = state.alphaLv;
+  $("blurLvRange").value = state.blurLv;
+  setText("alphaVal", Math.round(state.alphaLv / 6 * 100) + "%");
+  setText("blurVal", Math.round(state.blurLv / 6 * 50) + "px");
   paintRange($("txtRange"));
   paintRange($("spRange"));
+  paintRange($("alphaRange"));
+  paintRange($("blurLvRange"));
 }
 
 function syncParams() {
@@ -1243,8 +1261,14 @@ function loadConfig() {
     if (m) state.txt = Math.min(1.25, Math.max(0.85, parseFloat(m[1])));
     m = wpart.match(/sp=([\d.]+)/);
     if (m) state.sp = Math.min(1.2, Math.max(0.5, parseFloat(m[1])));
-    m = wpart.match(/blur=(\d+)/);
-    if (m) state.blur = parseInt(m[1], 10) ? 1 : 0;
+    m = wpart.match(/alpha=(\d+)/);
+    if (m) state.alphaLv = Math.min(6, Math.max(0, parseInt(m[1], 10)));
+    m = wpart.match(/blurlv=(\d+)/);
+    if (m) state.blurLv = Math.min(6, Math.max(0, parseInt(m[1], 10)));
+    else if ((m = wpart.match(/blur=(\d+)/))) {
+      /* 旧版是 0/1 开关，迁移到档位 */
+      state.blurLv = parseInt(m[1], 10) ? 3 : 0;
+    }
     m = wpart.match(/cards=([a-z,]*)/);
     if (m) {
       var vis = {};
@@ -1310,11 +1334,21 @@ $("spRange").addEventListener("input", function () {
 });
 $("spRange").addEventListener("change", saveAppearance);
 
-$("blurTgl").addEventListener("change", function () {
-  state.blur = this.checked ? 1 : 0;
+$("alphaRange").addEventListener("input", function () {
+  paintRange(this);
+  state.alphaLv = parseFloat(this.value);
+  setText("alphaVal", Math.round(state.alphaLv / 6 * 100) + "%");
   applyTheme();
-  saveAppearance();
 });
+$("alphaRange").addEventListener("change", saveAppearance);
+
+$("blurLvRange").addEventListener("input", function () {
+  paintRange(this);
+  state.blurLv = parseFloat(this.value);
+  setText("blurVal", Math.round(state.blurLv / 6 * 50) + "px");
+  applyTheme();
+});
+$("blurLvRange").addEventListener("change", saveAppearance);
 
 var hexEl = $("hexInput");
 
@@ -1398,6 +1432,8 @@ buildBar($("txtRange"));
 buildBar($("spRange"));
 buildBar($("maxCur"));
 buildBar($("chargePoll"));
+buildBar($("alphaRange"));
+buildBar($("blurLvRange"));
 syncDisplay();
 buildCardChips();
 applyCards();
