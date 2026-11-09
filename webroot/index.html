@@ -489,7 +489,7 @@
         <span class="row-label">最大充电电流</span>
         <span class="row-value" id="curVal">--</span>
       </div>
-      <div class="barwrap"><input type="range" id="maxCur" min="1" max="13" step="0.5" value="6" class="bar"></div>
+      <div class="barwrap"><input type="range" id="maxCur" min="1" max="10" step="0.5" value="6" class="bar"></div>
       <p class="hint">硬件是离散档位（13/12.5/11.5/10.5/9.5/8.5/7/6/5/4/3/2.5/2/1.5/0.5A），实际取不低于目标值的最小档。</p>
     </div>
 
@@ -1146,11 +1146,15 @@ function buildBar(el) {
   var n = Math.round((max - min) / step) + 1;
   if (n < 2) return;
 
-  /* 首尾各内缩 7px，否则圆角会把点吃掉一半 */
+  /* 只把首尾两个点往里挪 7px，避免被圆角吃掉；
+     中间的点必须严格落在 i/(n-1) 上，否则跟把手对不齐。 */
   var dots = "";
   for (var i = 0; i < n; i++) {
-    var t = (i / (n - 1)).toFixed(4);
-    dots += '<i style="left:calc(7px + (100% - 14px) * ' + t + ')"></i>';
+    var pos;
+    if (i === 0) pos = "7px";
+    else if (i === n - 1) pos = "calc(100% - 7px)";
+    else pos = (i / (n - 1) * 100).toFixed(4) + "%";
+    dots += '<i style="left:' + pos + '"></i>';
   }
 
   var skin = document.createElement("div");
@@ -1230,7 +1234,7 @@ function loadConfig() {
     if (m) state.mode = m[1];
 
     m = cpart.match(/MAX_CURRENT=(\d+)/);
-    if (m) state.maxCur = Math.min(13, Math.max(1, parseInt(m[1], 10) / 1e6));
+    if (m) state.maxCur = Math.min(10, Math.max(1, parseInt(m[1], 10) / 1e6));
     m = cpart.match(/CHARGE_POLL=([\d.]+)/);
     if (m) state.poll = Math.min(1, Math.max(0.1, parseFloat(m[1])));
     m = wpart.match(/txt=([\d.]+)/);
