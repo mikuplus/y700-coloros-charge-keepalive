@@ -32,7 +32,9 @@
   .page{transition:transform .32s cubic-bezier(.2,0,0,1),opacity .28s}
   #p-set{
     position:fixed;inset:0;
-    padding:0 max(16px, calc((100vw - 720px) / 2)) 40px;
+    /* 与主页 #app 的内容左边缘严格对齐：
+       窄屏 16*sp，宽屏 (vw-720)/2 + 16*sp，两页切换时不会横向跳 */
+    padding:0 max(calc(16px*var(--sp)), calc((100vw - 720px)/2 + 16px*var(--sp))) calc(40px*var(--sp));
     background:var(--surface);
     transform:translateX(100%);opacity:0;pointer-events:none;
     overflow-y:auto;z-index:10;
@@ -55,7 +57,7 @@
     cursor:pointer;transition:background .2s,transform .12s;
   }
   .icon-btn:active{transform:scale(.92)}
-  .icon-btn svg{display:block}
+  .icon-btn svg{display:block;width:calc(22px*var(--sp));height:calc(22px*var(--sp))}
 
   /* ---------- Hero ---------- */
   .hero{
@@ -149,7 +151,7 @@
   .row-value{font-size:calc(13px * var(--txt));color:var(--on-surface-variant);font-variant-numeric:tabular-nums}
   .row-value.mono{font-family:ui-monospace,Menlo,monospace;font-size:calc(11.5px * var(--txt))}
 
-  .swatches{display:grid;grid-template-columns:repeat(10,1fr);gap:calc(9px*var(--sp));padding:calc(6px*var(--sp)) 0 calc(18px*var(--sp));max-width:calc(470px*var(--sp))}
+  .swatches{display:grid;grid-template-columns:repeat(10,1fr);gap:calc(9px*var(--sp));padding:calc(6px*var(--sp)) 0 calc(18px*var(--sp));max-width:calc(470px*var(--sp));margin:0 auto}
   .sw{
     aspect-ratio:1;border-radius:50%;border:none;cursor:pointer;
     position:relative;transition:transform .15s;padding:0;
@@ -975,20 +977,28 @@ function renderStatus(raw) {
 
   setText("cap", isNaN(cap) ? "--" : cap);
 
-  var charging = (ia < 0);
+  var stLow = String(st || "").toLowerCase();
+  var discharging = stLow.indexOf("discharg") === 0;
+  var charging = (ia < 0) && !discharging;
+
   $("state").className = "chip" + (charging ? " on" : "");
-  setText("state-txt", charging ? "充电中" : (st || "未知"));
+  setText("state-txt", discharging ? "放电中" : (charging ? "充电中" : (st || "未知")));
 
   var note = "";
   if (ce === "0" && charging) note = "ce=0 · 保活中";
   else if (usb) note = usb;
   setText("note", note);
 
-  setText("sub", charging ? "保活运行中" : "等待插入充电器");
+  setText("sub", charging ? "保活运行中"
+        : (discharging ? "未接入电源，正在放电" : "等待插入充电器"));
 
-  setText("cur", isNaN(ia) ? "--" : fmt(Math.abs(ia), 1e6, 2));
+  /* 充电为正、放电为负：内核在部分固件上充电报负值，
+     所以不直接跟随原始符号，改由电池状态决定方向 */
+  var dirA = isNaN(ia) ? NaN : (discharging ? -Math.abs(ia) : Math.abs(ia));
+
+  setText("cur", isNaN(dirA) ? "--" : (dirA / 1e6).toFixed(2));
   /* 内核报的是单芯电压，串联双芯整包要乘电芯数 */
-  var w = (!isNaN(ia) && !isNaN(ua)) ? Math.abs(ia) * ua * state.cells / 1e12 : NaN;
+  var w = (!isNaN(dirA) && !isNaN(ua)) ? dirA * ua * state.cells / 1e12 : NaN;
   setText("pw", isNaN(w) ? "--" : w.toFixed(1));
   setText("volt", isNaN(ua) ? "--" : ((ua * state.cells) / 1e6).toFixed(2));
   setText("temp", isNaN(t) ? "--" : (t / 10).toFixed(1));
