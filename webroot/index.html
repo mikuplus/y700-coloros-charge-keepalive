@@ -7,7 +7,8 @@
 <title>充电保活</title>
 <style>
   /* 这几个由 JS 注入，先给默认值，否则 calc(px * var(--x)) 会失效 */
-  :root{ --txt:1; --sp:1; --blur:20px; --glow-a:transparent; --glow-b:transparent; --glow-op:0 }
+  /* --flowa 在这里兜底：万一 WebView 不认 @property，渐变仍有值（只是不转） */
+  :root{ --txt:1; --sp:1; --blur:20px; --glow-a:transparent; --glow-b:transparent; --glow-op:0; --flowa:0deg }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   html{background:var(--surface);transition:background .3s}
   body{
@@ -70,6 +71,46 @@
     display:flex;align-items:center;justify-content:space-between;gap:16px;
     margin-bottom:14px;transition:background .3s;
   }
+  /* ---------- 充电流光：conic 渐变沿边框旋转 ---------- */
+  @property --flowa{syntax:'<angle>';initial-value:0deg;inherits:false}
+  .hero-glow{
+    position:absolute;inset:calc(-1px*var(--sp));
+    padding:calc(2px*var(--sp));
+    border-radius:inherit;
+    pointer-events:none;opacity:0;transition:opacity .5s ease;
+    /* 用 mask 把中间挖空，只留一圈边 */
+    -webkit-mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    -webkit-mask-composite:xor;
+    mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    mask-composite:exclude;
+    background:conic-gradient(from var(--flowa),
+      var(--flow-dim) 0deg,
+      var(--flow-dim) 150deg,
+      var(--flow-mid) 205deg,
+      var(--on-primary-container) 258deg,
+      #fff 300deg,
+      var(--on-primary-container) 334deg,
+      var(--flow-mid) 356deg,
+      var(--flow-dim) 360deg);
+    animation:flowspin 4.2s linear infinite;
+  }
+  @keyframes flowspin{to{--flowa:360deg}}
+
+  body.charging .hero-glow{opacity:1}
+  body.charging .hero{
+    box-shadow:inset 0 1px 0 var(--card-shine),
+               0 0 calc(30px*var(--sp)) calc(-12px*var(--sp)) var(--flow-glow);
+  }
+  /* 设置页盖住主页时暂停，省电 */
+  body.setting .hero-glow{animation-play-state:paused}
+  @media (prefers-reduced-motion:reduce){
+    .hero-glow{animation:none;opacity:0 !important}
+  }
+
   .cap-wrap{display:flex;align-items:baseline}
   .cap{font-size:calc(52px * var(--txt));font-weight:300;line-height:.95;letter-spacing:-2px;font-variant-numeric:tabular-nums}
   .pct{font-size:calc(20px * var(--txt));margin-left:3px;opacity:.65}
@@ -367,6 +408,7 @@
     </header>
 
     <div class="hero">
+      <span class="hero-glow" aria-hidden="true"></span>
       <div class="cap-wrap">
         <span class="cap" id="cap">--</span><span class="pct">%</span>
       </div>
@@ -844,6 +886,9 @@ function applyUiScale(c, sc) {
   root.style.setProperty("--card-bg", hexToRgba(c.surfaceContainer, dk ? alpha : Math.min(1, alpha + 0.24)));
   root.style.setProperty("--hero-bg", hexToRgba(c.primaryContainer, dk ? Math.min(1, alpha + 0.18) : Math.min(1, alpha + 0.4)));
   root.style.setProperty("--card-line", hexToRgba(c.primary, 0.22));
+  root.style.setProperty("--flow-glow", hexToRgba(c.primary, 0.6));
+  root.style.setProperty("--flow-dim", hexToRgba(c.onPrimaryContainer, 0.16));
+  root.style.setProperty("--flow-mid", hexToRgba(c.onPrimaryContainer, 0.52));
   root.style.setProperty("--hero-line", hexToRgba(c.onPrimaryContainer, 0.16));
   root.style.setProperty("--card-shine", shine ? "rgba(255,255,255,0.055)" : "transparent");
 
@@ -983,6 +1028,8 @@ function renderStatus(raw) {
 
   $("state").className = "chip" + (charging ? " on" : "");
   setText("state-txt", discharging ? "放电中" : (charging ? "充电中" : (st || "未知")));
+  /* 只在充电时挂流光，放电/断电自动停 */
+  document.body.classList.toggle("charging", charging);
 
   var note = "";
   if (ce === "0" && charging) note = "ce=0 · 保活中";
@@ -1008,6 +1055,7 @@ function renderStatus(raw) {
 }
 
 function renderStatusError(err) {
+  document.body.classList.remove("charging");
   $("state").className = "chip";
   if (err === "no-bridge") {
     setText("state-txt", "接口不可用");
