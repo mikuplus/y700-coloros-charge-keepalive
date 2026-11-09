@@ -489,7 +489,7 @@
         <span class="row-label">最大充电电流</span>
         <span class="row-value" id="curVal">--</span>
       </div>
-      <input type="range" id="maxCur" min="1" max="13" step="0.5" value="6">
+      <div class="barwrap"><input type="range" id="maxCur" min="1" max="13" step="0.5" value="6" class="bar"></div>
       <p class="hint">硬件是离散档位（13/12.5/11.5/10.5/9.5/8.5/7/6/5/4/3/2.5/2/1.5/0.5A），实际取不低于目标值的最小档。</p>
     </div>
 
@@ -498,7 +498,7 @@
         <span class="row-label">充电轮询间隔</span>
         <span class="row-value" id="pollVal">--</span>
       </div>
-      <input type="range" id="chargePoll" min="0.1" max="1" step="0.1" value="0.3">
+      <div class="barwrap"><input type="range" id="chargePoll" min="0.1" max="1" step="0.1" value="0.3" class="bar"></div>
       <p class="hint">调大更省电，但 charging_enable 被打回后恢复更慢。改完约 3 秒生效。</p>
     </div>
 
@@ -1188,6 +1188,8 @@ function syncParams() {
   $("chargePoll").value = state.poll;
   setText("curVal", state.maxCur.toFixed(1) + " A");
   setText("pollVal", state.poll.toFixed(1) + " s");
+  paintRange($("maxCur"));
+  paintRange($("chargePoll"));
 }
 
 function saveParam(key, value) {
@@ -1356,6 +1358,7 @@ $("dualCell").addEventListener("change", function () {
 });
 
 $("maxCur").addEventListener("input", function () {
+  paintRange(this);
   setText("curVal", parseFloat(this.value).toFixed(1) + " A");
 });
 $("maxCur").addEventListener("change", function () {
@@ -1365,6 +1368,7 @@ $("maxCur").addEventListener("change", function () {
 });
 
 $("chargePoll").addEventListener("input", function () {
+  paintRange(this);
   setText("pollVal", parseFloat(this.value).toFixed(1) + " s");
 });
 $("chargePoll").addEventListener("change", function () {
@@ -1386,6 +1390,8 @@ syncMode();
 syncParams();
 buildBar($("txtRange"));
 buildBar($("spRange"));
+buildBar($("maxCur"));
+buildBar($("chargePoll"));
 syncDisplay();
 buildCardChips();
 applyCards();
