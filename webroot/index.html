@@ -200,7 +200,7 @@
   .row-value{font-size:calc(13px * var(--txt));color:var(--on-surface-variant);font-variant-numeric:tabular-nums}
   .row-value.mono{font-family:ui-monospace,Menlo,monospace;font-size:calc(11.5px * var(--txt))}
 
-  .swatches{display:grid;grid-template-columns:repeat(10,1fr);gap:calc(9px*var(--sp));padding:calc(6px*var(--sp)) 0 calc(18px*var(--sp));max-width:calc(470px*var(--sp));margin:0 auto}
+  .swatches{display:grid;grid-template-columns:repeat(10,1fr);gap:calc(10px*var(--sp));padding:calc(6px*var(--sp)) 0 calc(18px*var(--sp));max-width:calc(470px*var(--sp));margin:0 auto}
   .sw{
     aspect-ratio:1;border-radius:50%;border:none;cursor:pointer;
     position:relative;transition:transform .15s;padding:0;
@@ -208,8 +208,9 @@
   }
   .sw:active{transform:scale(.88)}
   .sw[aria-pressed="true"]::after{
-    content:"";position:absolute;inset:-5px;
-    border:2px solid var(--primary);border-radius:50%;
+    content:"";position:absolute;
+    inset:calc(-4px*var(--sp));
+    border:calc(2px*var(--sp)) solid var(--primary);border-radius:50%;
   }
   .sw.custom{
     background:conic-gradient(#e57373,#ffb74d,#fff176,#81c784,#4fc3f7,#9575cd,#e57373);
@@ -260,7 +261,7 @@
   }
 
   .hex-in{
-    width:calc(122px*var(--sp));
+    width:calc(122px*var(--sp));min-width:104px;
     padding:calc(9px*var(--sp)) calc(12px*var(--sp));border-radius:calc(12px*var(--sp));
     border:1px solid var(--outline-variant);background:var(--surface-dim);
     color:var(--on-surface);font-family:ui-monospace,Menlo,monospace;
@@ -927,8 +928,10 @@ function swatchColor(p) {
   var pal = rgb2oklch(hex2rgb(p.hex));
   var d = p.dim || 0;
   var sat = d > 0 ? 1.6 : 1;
-  if (isDark()) return d > 0 ? toneOf(pal, 55, 1.6) : toneOf(pal, 80, 1);
-  return d > 0 ? toneOf(pal, 32, 1.6) : toneOf(pal, 40, 1);
+  /* 固定取浅色模式的 primary 作为「这个预设长什么样」。
+     之前跟随明暗，深色下勃艮第红会变成浅玫瑰粉、跟别的预设亮度不齐，
+     用户看到的就不是酒红了。 */
+  return toneOf(pal, Math.max(0, 40 - d), sat);
 }
 
 function paintSwatchColors() {
