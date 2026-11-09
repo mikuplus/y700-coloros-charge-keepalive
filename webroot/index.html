@@ -272,6 +272,26 @@
     background:var(--on-primary-container);border:none;
     margin-top:-10px;box-shadow:0 0 6px rgba(0,0,0,.35);
   }
+  .barwrap{position:relative;display:block}
+  .barwrap::before,.barwrap::after{
+    content:"";position:absolute;left:0;top:50%;
+    height:26px;transform:translateY(-50%);
+    border-radius:13px;pointer-events:none;
+    background-repeat:repeat-x;
+    background-size:32px 26px;
+    background-position:16px 50%;
+  }
+  /* 未填充区：浅点 */
+  .barwrap::before{
+    width:100%;
+    background-image:radial-gradient(circle,var(--dot-track) 2px,transparent 2.4px);
+  }
+  /* 填充区：深点，宽度跟着 --pct 走，圆角处被裁掉 */
+  .barwrap::after{
+    width:var(--pct,50%);
+    background-image:radial-gradient(circle,var(--dot-fill) 2px,transparent 2.4px);
+  }
+
   .bar-ends{
     display:flex;justify-content:space-between;
     font-size:calc(11.5px*var(--txt));color:var(--on-surface-variant);
@@ -416,7 +436,7 @@
         <span class="row-label">字体大小</span>
         <span class="row-value" id="txtVal">100%</span>
       </div>
-      <input type="range" id="txtRange" min="85" max="125" step="5" value="100" class="bar">
+      <div class="barwrap"><input type="range" id="txtRange" min="85" max="125" step="5" value="100" class="bar"></div>
       <div class="bar-ends"><span>更小</span><span>更大</span></div>
     </div>
 
@@ -425,7 +445,7 @@
         <span class="row-label">全局缩放</span>
         <span class="row-value" id="spVal">100%</span>
       </div>
-      <input type="range" id="spRange" min="85" max="120" step="5" value="100" class="bar">
+      <div class="barwrap"><input type="range" id="spRange" min="85" max="120" step="5" value="100" class="bar"></div>
       <div class="bar-ends"><span>更小</span><span>更大</span></div>
       <p class="hint">同时缩放字号与卡片内边距。小屏嫌挤就往下调，平板远看就往上调。</p>
     </div>
@@ -788,6 +808,9 @@ function applyUiScale(c, sc) {
   var dk = isDark();
   root.style.setProperty("--blur", on ? "22px" : "0px");
   root.style.setProperty("--bar-empty", dk ? "rgba(255,255,255,0.11)" : "rgba(0,0,0,0.10)");
+  /* 刻度点：填充区用深点、轨道用浅点，两种模式各自调 */
+  root.style.setProperty("--dot-fill",  dk ? "rgba(0,0,0,0.40)" : "rgba(0,0,0,0.32)");
+  root.style.setProperty("--dot-track", dk ? "rgba(255,255,255,0.28)" : "rgba(0,0,0,0.17)");
   /* 浅色背景本身很淡，卡片要更实一点，否则和背景糊成一片 */
   root.style.setProperty("--card-bg", on ? hexToRgba(c.surfaceContainer, dk ? 0.52 : 0.76) : c.surfaceContainer);
   root.style.setProperty("--hero-bg", on ? hexToRgba(c.primaryContainer, dk ? 0.7 : 0.95) : c.primaryContainer);
@@ -1104,6 +1127,9 @@ function paintRange(el) {
   var min = parseFloat(el.min), max = parseFloat(el.max), v = parseFloat(el.value);
   var pct = ((v - min) / (max - min) * 100).toFixed(2) + "%";
   el.style.setProperty("--pct", pct);
+  if (el.parentNode && el.parentNode.classList.contains("barwrap")) {
+    el.parentNode.style.setProperty("--pct", pct);
+  }
 }
 
 function syncDisplay() {
