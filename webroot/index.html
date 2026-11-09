@@ -58,6 +58,8 @@
   }
   .icon-btn:active{transform:scale(.92)}
   .icon-btn svg{display:block;width:calc(22px*var(--sp));height:calc(22px*var(--sp))}
+  /* chevron 的包围盒居中，但尖端朝左、视觉重心偏左，整体右移一点才看着在中间 */
+  #btn-back svg{transform:translateX(calc(1.2px*var(--sp)))}
 
   /* ---------- Hero ---------- */
   .hero{
@@ -388,6 +390,26 @@
   }
   #toast.show{opacity:1;transform:translate(-50%,0)}
 
+  /* ---------- 回到顶部 ---------- */
+  .to-top{
+    position:fixed;z-index:12;
+    right:calc(18px*var(--sp));
+    bottom:calc(22px*var(--sp));
+    width:calc(46px*var(--sp));height:calc(46px*var(--sp));
+    border:1px solid var(--card-line);border-radius:50%;
+    display:grid;place-items:center;
+    background:var(--primary-container);color:var(--on-primary-container);
+    box-shadow:0 6px 18px -4px rgba(0,0,0,.42);
+    cursor:pointer;
+    opacity:0;transform:translateY(10px) scale(.92);pointer-events:none;
+    transition:opacity .22s ease,transform .24s cubic-bezier(.34,1.4,.64,1);
+  }
+  /* #p-set 有 transform，放在它内部会被当时定位并随内容滚走，
+     所以按钮挂在 #app 后面，靠 body.setting 控制显隐 */
+  body.setting .to-top.show{opacity:1;transform:none;pointer-events:auto}
+  .to-top:active{transform:scale(.9)}
+  .to-top svg{width:calc(20px*var(--sp));height:calc(20px*var(--sp));display:block}
+
   /* ---- 窄屏适配：必须放在最后，否则被上面的 .swatches 等规则覆盖 ---- */
   @media(max-width:430px){
     #app{padding:0 12px 32px}
@@ -578,6 +600,11 @@
   </section>
 </div>
 
+  <button class="to-top" id="toTop" aria-label="回到顶部">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 19.5V5.5"/><path d="M6 11.5l6-6 6 6"/>
+      </svg>
+  </button>
 <div id="toast"></div>
 
 <script>
@@ -844,6 +871,21 @@ var state = {
 CARDS.forEach(function (c) { state.cards[c.k] = 1; });
 
 var $ = function (id) { return document.getElementById(id); };
+
+(function bindToTop() {
+  var ps = $("p-set"), btn = $("toTop");
+  if (!ps || !btn) return;
+  ps.addEventListener("scroll", syncToTop, { passive: true });
+  btn.addEventListener("click", function () {
+    if (!ps.scrollTop) return;
+    if (ps.scrollTo) ps.scrollTo({ top: 0, behavior: "smooth" });
+    else ps.scrollTop = 0;
+    /* 兜底：个别 WebView 在合成器暂停时 smooth 不推进，700ms 后仍未回顶就直跳 */
+    setTimeout(function () {
+      if (ps.scrollTop > 4) ps.scrollTop = 0;
+    }, 700);
+  });
+})();
 function setText(id, v) {
   var el = $(id);
   if (el) el.textContent = (v === null || v === undefined) ? "--" : String(v);
@@ -1365,10 +1407,17 @@ function loadConfig() {
 /* ============================================================
    9. 事件与启动
    ============================================================ */
+function syncToTop() {
+  var ps = $("p-set"), btn = $("toTop");
+  if (!ps || !btn) return;
+  btn.classList.toggle("show", ps.scrollTop > 60);
+}
+
 function openSettings() {
   state.view = "settings";
   document.body.classList.add("setting");
   loadConfig();
+  syncToTop();
 }
 function closeSettings() {
   state.view = "home";
