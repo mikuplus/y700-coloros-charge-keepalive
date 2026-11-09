@@ -134,6 +134,26 @@ UCSI: handle_ucsi_read_ack: [LENOVO_UCSI] port_num=1, change=0x0040,
 所以退回到 `sleep 5` 静默自查：频率 0.2 次/秒，等待期间不写日志，实测累计 CPU 只有几十毫秒。
 插电后最多 5 秒开始保活。
 
+## 打包与版本
+
+```bash
+python build.py          # 打包当前版本
+python build.py --list   # 列出已有产物
+```
+
+产物在 `releases/`：
+
+| 文件 | 用途 |
+|---|---|
+| `releases/charge_keepalive_fix_v3.0.zip` | 当前版本，刷这个 |
+| `releases/history/*.zip` | 每次内容变化前的自动备份（带时间戳） |
+| `charge_keepalive_fix.zip` | 根目录快捷副本，始终指向最新 |
+
+版本号取自 `module.prop` 的 `version` 行，WebUI 顶部的版本显示也是读它。
+
+**只在有明显功能更新时才改版本号**。小修补直接重复打包：内容没变就只刷新时间戳，
+内容变了则把旧包挪进 `history/` 再覆盖同名文件，不会丢历史，也不会堆垃圾。
+
 ## 安装
 
 需要已 root（KernelSU / SukiSU / Magisk）。
