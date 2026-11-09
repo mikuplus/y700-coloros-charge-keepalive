@@ -58,8 +58,9 @@
   }
   .icon-btn:active{transform:scale(.92)}
   .icon-btn svg{display:block;width:calc(22px*var(--sp));height:calc(22px*var(--sp))}
-  /* chevron 的包围盒居中，但尖端朝左、视觉重心偏左，整体右移一点才看着在中间 */
-  #btn-back svg{transform:translateX(calc(1.2px*var(--sp)))}
+  /* chevron 的包围盒居中，但墨水重心偏右约 0.6px（开口那两条线笔画更多），
+     左移这个量才看着在正中 */
+  #btn-back svg{transform:translateX(calc(-0.6px*var(--sp)))}
 
   /* ---------- Hero ---------- */
   .hero{
