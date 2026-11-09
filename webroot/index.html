@@ -26,7 +26,7 @@
     opacity:var(--glow-op);
     transition:opacity .3s;
   }
-  #app{max-width:720px;margin:0 auto;padding:0 16px 40px;position:relative;overflow:hidden;z-index:1}
+  #app{max-width:720px;margin:0 auto;padding:0 calc(16px*var(--sp)) calc(40px*var(--sp));position:relative;overflow:hidden;z-index:1}
 
   /* ---------- 页面切换 ---------- */
   .page{transition:transform .32s cubic-bezier(.2,0,0,1),opacity .28s}
@@ -43,12 +43,12 @@
   body.setting #p-set{transform:translateX(0);opacity:1;pointer-events:auto}
 
   /* ---------- 顶栏 ---------- */
-  .topbar{display:flex;align-items:center;gap:12px;padding:20px 0 16px}
+  .topbar{display:flex;align-items:center;gap:calc(12px*var(--sp));padding:calc(20px*var(--sp)) 0 calc(16px*var(--sp))}
   .topbar h1{margin:0;font-size:calc(23px * var(--txt));font-weight:600;letter-spacing:-.2px}
   .topbar .grow{flex:1}
   .sub{margin:2px 0 0;font-size:calc(12.5px * var(--txt));color:var(--on-surface-variant)}
   .icon-btn{
-    width:44px;height:44px;flex:0 0 44px;
+    width:calc(44px*var(--sp));height:calc(44px*var(--sp));flex:0 0 calc(44px*var(--sp));
     display:grid;place-items:center;
     border:none;border-radius:50%;
     background:var(--surface-container-high);color:var(--on-surface);
@@ -64,7 +64,7 @@
     backdrop-filter:blur(var(--blur));
     border:1px solid var(--hero-line);
     box-shadow:inset 0 1px 0 var(--card-shine);
-    border-radius:28px;padding:calc(24px*var(--sp)) calc(22px*var(--sp));
+    border-radius:calc(28px*var(--sp));padding:calc(24px*var(--sp)) calc(22px*var(--sp));
     display:flex;align-items:center;justify-content:space-between;gap:16px;
     margin-bottom:14px;transition:background .3s;
   }
@@ -84,10 +84,10 @@
   .hero-note{font-size:calc(11.5px * var(--txt));opacity:.7}
 
   /* ---------- 指标 ---------- */
-  .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:calc(10px*var(--sp));margin-bottom:18px}
+  .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:calc(10px*var(--sp));margin-bottom:calc(18px*var(--sp))}
   @media(max-width:420px){.grid{grid-template-columns:repeat(2,1fr)}}
   .card{
-    background:var(--card-bg);border-radius:20px;
+    background:var(--card-bg);border-radius:calc(20px*var(--sp));
     padding:calc(14px*var(--sp)) calc(12px*var(--sp));
     border:1px solid var(--card-line);
     -webkit-backdrop-filter:blur(var(--blur));
@@ -110,11 +110,11 @@
   .card:active{transform:scale(.975)}
 
   /* ---------- 区块 ---------- */
-  .block{margin-bottom:18px}
+  .block{margin-bottom:calc(18px*var(--sp))}
   .block h2{margin:0 0 8px 4px;font-size:calc(12.5px * var(--txt));font-weight:600;color:var(--on-surface-variant);letter-spacing:.3px}
   pre{
     margin:0;padding:calc(14px*var(--sp)) calc(15px*var(--sp));
-    background:var(--card-bg);border:1px solid var(--card-line);border-radius:18px;
+    background:var(--card-bg);border:1px solid var(--card-line);border-radius:calc(18px*var(--sp));
     -webkit-backdrop-filter:blur(var(--blur));
     backdrop-filter:blur(var(--blur));
     font-family:ui-monospace,"SF Mono",Menlo,monospace;
@@ -127,7 +127,7 @@
   /* ---------- 设置页 ---------- */
   .group{
     display:flex;align-items:center;gap:9px;
-    margin:24px 0 10px;font-size:calc(13px * var(--txt));font-weight:600;
+    margin:calc(24px*var(--sp)) 0 calc(10px*var(--sp));font-size:calc(13px * var(--txt));font-weight:600;
     color:var(--on-surface);letter-spacing:.2px;
   }
   .gicon{
@@ -138,7 +138,7 @@
   .gicon svg{width:16px;height:16px;display:block}
   .panel{
     background:var(--surface-container);border-radius:22px;
-    padding:calc(6px*var(--sp)) calc(18px*var(--sp));margin-bottom:12px;transition:background .3s;
+    padding:calc(6px*var(--sp)) calc(18px*var(--sp));margin-bottom:calc(12px*var(--sp));transition:background .3s;
   }
   .row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:calc(14px*var(--sp)) 0}
   .row + .row{border-top:1px solid var(--outline-variant)}
@@ -213,7 +213,7 @@
 
   .segmented{
     display:flex;gap:4px;background:var(--surface-dim);
-    border-radius:999px;padding:4px;margin:0 0 16px;
+    border-radius:999px;padding:calc(4px*var(--sp));margin:0 0 calc(16px*var(--sp));
   }
   .segmented button{
     flex:1;border:none;background:transparent;color:var(--on-surface-variant);
@@ -1129,9 +1129,11 @@ function buildBar(el) {
   var n = Math.round((max - min) / step) + 1;
   if (n < 2) return;
 
+  /* 首尾各内缩 7px，否则圆角会把点吃掉一半 */
   var dots = "";
   for (var i = 0; i < n; i++) {
-    dots += '<i style="left:' + (i / (n - 1) * 100).toFixed(4) + '%"></i>';
+    var t = (i / (n - 1)).toFixed(4);
+    dots += '<i style="left:calc(7px + (100% - 14px) * ' + t + ')"></i>';
   }
 
   var skin = document.createElement("div");
