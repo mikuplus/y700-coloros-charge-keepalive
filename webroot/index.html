@@ -457,7 +457,7 @@
         <span class="row-label">全局缩放</span>
         <span class="row-value" id="spVal">100%</span>
       </div>
-      <div class="barwrap"><input type="range" id="spRange" min="85" max="120" step="5" value="100" class="bar"></div>
+      <div class="barwrap"><input type="range" id="spRange" min="50" max="120" step="5" value="100" class="bar"></div>
       <div class="bar-ends"><span>更小</span><span>更大</span></div>
       <p class="hint">同时缩放字号与卡片内边距。小屏嫌挤就往下调，平板远看就往上调。</p>
     </div>
@@ -1234,7 +1234,7 @@ function loadConfig() {
     m = wpart.match(/txt=([\d.]+)/);
     if (m) state.txt = Math.min(1.25, Math.max(0.85, parseFloat(m[1])));
     m = wpart.match(/sp=([\d.]+)/);
-    if (m) state.sp = Math.min(1.2, Math.max(0.85, parseFloat(m[1])));
+    if (m) state.sp = Math.min(1.2, Math.max(0.5, parseFloat(m[1])));
     m = wpart.match(/blur=(\d+)/);
     if (m) state.blur = parseInt(m[1], 10) ? 1 : 0;
     m = wpart.match(/cards=([a-z,]*)/);
