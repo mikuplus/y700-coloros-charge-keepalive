@@ -256,41 +256,36 @@
 
   /* 进度条式滑块：粗轨道 + 左侧填充 + 竖线把手 */
   input[type=range].bar{
-    height:46px;margin:8px 0 0;
-    --pct:50%;
-    --fill:var(--primary-container);
-    --empty:var(--bar-empty,rgba(255,255,255,.11));
+    position:absolute;left:0;right:0;top:0;height:46px;margin:0;
+    background:transparent;
   }
   input[type=range].bar::-webkit-slider-runnable-track{
-    height:26px;border-radius:13px;
-    background:linear-gradient(to right,
-      var(--fill) 0, var(--fill) var(--pct),
-      var(--empty) var(--pct), var(--empty) 100%);
+    height:26px;border-radius:13px;background:transparent;
   }
   input[type=range].bar::-webkit-slider-thumb{
     -webkit-appearance:none;width:6px;height:46px;border-radius:3px;
     background:var(--on-primary-container);border:none;
     margin-top:-10px;box-shadow:0 0 6px rgba(0,0,0,.35);
   }
-  .barwrap{position:relative;display:block}
-  .barwrap::before,.barwrap::after{
-    content:"";position:absolute;left:0;top:50%;
-    height:26px;transform:translateY(-50%);
-    border-radius:13px;pointer-events:none;
-    background-repeat:repeat-x;
-    background-size:32px 26px;
-    background-position:16px 50%;
+  .barwrap{position:relative;display:block;height:46px;margin:8px 0 0}
+  .barskin{
+    position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);
+    height:26px;border-radius:13px;background:var(--bar-empty);
+    overflow:hidden;pointer-events:none;
   }
-  /* 未填充区：浅点 */
-  .barwrap::before{
-    width:100%;
-    background-image:radial-gradient(circle,var(--dot-track) 2px,transparent 2.4px);
+  .barfill{
+    position:absolute;left:0;top:0;bottom:0;
+    width:var(--pct,50%);background:var(--primary-container);
   }
-  /* 填充区：深点，宽度跟着 --pct 走，圆角处被裁掉 */
-  .barwrap::after{
-    width:var(--pct,50%);
-    background-image:radial-gradient(circle,var(--dot-fill) 2px,transparent 2.4px);
+  .bardots{position:absolute;inset:0}
+  .bardots i{
+    position:absolute;top:50%;width:4px;height:4px;
+    margin:-2px 0 0 -2px;border-radius:50%;
+    background:var(--dot-track);
   }
+  /* 填充区那层点：整层铺满再用 clip-path 裁到当前值，点的位置不会错位 */
+  .bardots.dark{clip-path:inset(0 calc(100% - var(--pct,50%)) 0 0)}
+  .bardots.dark i{background:var(--dot-fill)}
 
   .bar-ends{
     display:flex;justify-content:space-between;
@@ -1123,6 +1118,32 @@ function buildCardChips() {
   syncCardChips();
 }
 
+/* 按 min/max/step 算出每个档位的位置，一个档位一个点 */
+function buildBar(el) {
+  var wrap = el.parentNode;
+  if (!wrap || !wrap.classList.contains("barwrap")) return;
+  if (wrap.querySelector(".barskin")) return;
+
+  var min = parseFloat(el.min), max = parseFloat(el.max);
+  var step = parseFloat(el.step) || 1;
+  var n = Math.round((max - min) / step) + 1;
+  if (n < 2) return;
+
+  var dots = "";
+  for (var i = 0; i < n; i++) {
+    dots += '<i style="left:' + (i / (n - 1) * 100).toFixed(4) + '%"></i>';
+  }
+
+  var skin = document.createElement("div");
+  skin.className = "barskin";
+  skin.innerHTML =
+    '<div class="barfill"></div>' +
+    '<div class="bardots">' + dots + '</div>' +
+    '<div class="bardots dark">' + dots + '</div>';
+  wrap.insertBefore(skin, el);
+  paintRange(el);
+}
+
 function paintRange(el) {
   var min = parseFloat(el.min), max = parseFloat(el.max), v = parseFloat(el.value);
   var pct = ((v - min) / (max - min) * 100).toFixed(2) + "%";
@@ -1344,6 +1365,8 @@ buildSwatches();
 applyVoltLabel();
 syncMode();
 syncParams();
+buildBar($("txtRange"));
+buildBar($("spRange"));
 syncDisplay();
 buildCardChips();
 applyCards();
