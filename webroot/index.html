@@ -7,8 +7,7 @@
 <title>充电保活</title>
 <style>
   /* 这几个由 JS 注入，先给默认值，否则 calc(px * var(--x)) 会失效 */
-  /* --flowa 在这里兜底：万一 WebView 不认 @property，渐变仍有值（只是不转） */
-  :root{ --txt:1; --sp:1; --blur:20px; --glow-a:transparent; --glow-b:transparent; --glow-op:0; --flowa:0deg }
+  :root{ --txt:1; --sp:1; --blur:20px; --glow-a:transparent; --glow-b:transparent; --glow-op:0 }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   html{background:var(--surface);transition:background .3s}
   body{
@@ -71,14 +70,14 @@
     display:flex;align-items:center;justify-content:space-between;gap:16px;
     margin-bottom:14px;transition:background .3s;
   }
-  /* ---------- 充电流光：conic 渐变沿边框旋转 ---------- */
-  @property --flowa{syntax:'<angle>';initial-value:0deg;inherits:false}
+  /* ---------- 充电流光：渐变盘旋转，只露边缘一圈 ---------- */
   .hero-glow{
     position:absolute;inset:calc(-1px*var(--sp));
     padding:calc(2px*var(--sp));
     border-radius:inherit;
+    overflow:hidden;contain:paint;
     pointer-events:none;opacity:0;transition:opacity .5s ease;
-    /* 用 mask 把中间挖空，只留一圈边 */
+    /* 中间挖空，只留一圈边 */
     -webkit-mask:
       linear-gradient(#000 0 0) content-box,
       linear-gradient(#000 0 0);
@@ -87,28 +86,37 @@
       linear-gradient(#000 0 0) content-box,
       linear-gradient(#000 0 0);
     mask-composite:exclude;
-    background:conic-gradient(from var(--flowa),
-      var(--flow-dim) 0deg,
-      var(--flow-dim) 150deg,
-      var(--flow-mid) 205deg,
-      var(--on-primary-container) 258deg,
-      #fff 300deg,
-      var(--on-primary-container) 334deg,
-      var(--flow-mid) 356deg,
-      var(--flow-dim) 360deg);
-    animation:flowspin 4.2s linear infinite;
   }
-  @keyframes flowspin{to{--flowa:360deg}}
+  /* 旋转的是元素本身，走合成层，不会每帧重绘渐变。
+     正方形边长必须盖住卡片对角线，140% 足够（卡片宽高比很大）。 */
+  .hero-glow::before{
+    content:"";position:absolute;left:50%;top:50%;
+    width:120%;aspect-ratio:1;
+    margin-left:-60%;margin-top:-60%;
+    will-change:transform;
+    backface-visibility:hidden;
+    background:conic-gradient(from 0deg,
+      var(--flow-base) 0deg,
+      var(--flow-base) 150deg,
+      var(--flow-mid)  215deg,
+      var(--flow-hi)   252deg,
+      #fff             266deg,
+      var(--flow-hi)   280deg,
+      var(--flow-mid)  330deg,
+      var(--flow-base) 360deg);
+    animation:flowspin 4.6s linear infinite;
+  }
+  @keyframes flowspin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
 
   body.charging .hero-glow{opacity:1}
   body.charging .hero{
     box-shadow:inset 0 1px 0 var(--card-shine),
-               0 0 calc(30px*var(--sp)) calc(-12px*var(--sp)) var(--flow-glow);
+               0 0 calc(28px*var(--sp)) calc(-14px*var(--sp)) var(--flow-glow);
   }
   /* 设置页盖住主页时暂停，省电 */
-  body.setting .hero-glow{animation-play-state:paused}
+  body.setting .hero-glow::before{animation-play-state:paused}
   @media (prefers-reduced-motion:reduce){
-    .hero-glow{animation:none;opacity:0 !important}
+    .hero-glow::before{animation:none;opacity:0 !important}
   }
 
   .cap-wrap{display:flex;align-items:baseline}
@@ -887,8 +895,9 @@ function applyUiScale(c, sc) {
   root.style.setProperty("--hero-bg", hexToRgba(c.primaryContainer, dk ? Math.min(1, alpha + 0.18) : Math.min(1, alpha + 0.4)));
   root.style.setProperty("--card-line", hexToRgba(c.primary, 0.22));
   root.style.setProperty("--flow-glow", hexToRgba(c.primary, 0.6));
-  root.style.setProperty("--flow-dim", hexToRgba(c.onPrimaryContainer, 0.16));
-  root.style.setProperty("--flow-mid", hexToRgba(c.onPrimaryContainer, 0.52));
+  root.style.setProperty("--flow-base", hexToRgba(c.onPrimaryContainer, 0.26));
+  root.style.setProperty("--flow-mid",  hexToRgba(c.onPrimaryContainer, 0.46));
+  root.style.setProperty("--flow-hi",   hexToRgba(c.onPrimaryContainer, 1));
   root.style.setProperty("--hero-line", hexToRgba(c.onPrimaryContainer, 0.16));
   root.style.setProperty("--card-shine", shine ? "rgba(255,255,255,0.055)" : "transparent");
 
