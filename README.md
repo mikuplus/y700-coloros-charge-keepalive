@@ -1,7 +1,7 @@
 # Y700 ColorOS 充电保活
 
 > 联想拯救者 Y700 四代（TB322FC）移植 ColorOS 16 后，充电断断续续 / 充不进去 / 锁屏反复弹充电动画的修复模块。
-> KernelSU / SukiSU / Magisk 通用。
+> KernelSU / SukiSU / Magisk 通用。当前版本 **v3.0**。
 
 ---
 
@@ -134,25 +134,20 @@ UCSI: handle_ucsi_read_ack: [LENOVO_UCSI] port_num=1, change=0x0040,
 所以退回到 `sleep 5` 静默自查：频率 0.2 次/秒，等待期间不写日志，实测累计 CPU 只有几十毫秒。
 插电后最多 5 秒开始保活。
 
-## 打包与版本
+## 界面
 
-```bash
-python build.py          # 打包当前版本
-python build.py --list   # 列出已有产物
-```
+模块自带状态页（KernelSU / SukiSU 的 WebUI），不需要额外装 App：
 
-产物在 `releases/`：
-
-| 文件 | 用途 |
+| 状态页 | 设置页 |
 |---|---|
-| `releases/charge_keepalive_fix_v3.0.zip` | 当前版本，刷这个 |
-| `releases/history/*.zip` | 每次内容变化前的自动备份（带时间戳） |
-| `charge_keepalive_fix.zip` | 根目录快捷副本，始终指向最新 |
+| ![状态页](docs/shot_home_dark.png) | ![设置页](docs/shot_settings.png) |
 
-版本号取自 `module.prop` 的 `version` 行，WebUI 顶部的版本显示也是读它。
+浅色模式：
 
-**只在有明显功能更新时才改版本号**。小修补直接重复打包：内容没变就只刷新时间戳，
-内容变了则把旧包挪进 `history/` 再覆盖同名文件，不会丢历史，也不会堆垃圾。
+![浅色](docs/shot_home_light.png)
+
+配色从种子色经 OKLCH 推导 Material You 色盘，内置 9 套预设加自定义色值；
+字号、全局缩放、卡片透明度与模糊度都能调；充电时电量卡边缘有一圈流动的光。
 
 ## 安装
 
@@ -160,7 +155,7 @@ python build.py --list   # 列出已有产物
 
 ```bash
 # KernelSU / SukiSU
-ksud module install charge_keepalive_fix.zip
+ksud module install charge_keepalive_fix_v3.0.zip
 
 # Magisk
 在 Magisk App 中「从本地安装」选择 zip
@@ -290,6 +285,26 @@ config.prop       可调参数
 3. 正常跑满 30 秒，把当前版本存为 `.bak`（所以备份永远是"真正跑起来过"的版本）
 
 改坏了最坏情况是 2 秒内自动恢复，不会把充电搞停。
+
+## 打包与版本
+
+```bash
+python build.py          # 打包当前版本
+python build.py --list   # 列出已有产物
+```
+
+产物在 `releases/`：
+
+| 文件 | 用途 |
+|---|---|
+| `releases/charge_keepalive_fix_v3.0.zip` | 当前版本，刷这个 |
+| `releases/history/*.zip` | 每次内容变化前的自动备份（带时间戳） |
+| `charge_keepalive_fix.zip` | 根目录快捷副本，始终指向最新 |
+
+版本号取自 `module.prop` 的 `version` 行，WebUI 顶部的版本显示也是读它。
+
+**只在有明显功能更新时才改版本号**。小修补直接重复打包：内容没变就只刷新时间戳，
+内容变了则把旧包挪进 `history/` 再覆盖同名文件，不会丢历史，也不会堆垃圾。
 
 ## 已验证场景
 

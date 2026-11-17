@@ -8,3 +8,6 @@ worker.sh.bak
 .DS_Store
 Thumbs.db
 *.swp
+
+# 生成 README 截图时的临时页
+_shot/
